@@ -56,7 +56,7 @@ public class ActivationCodeGeneratorTest {
         String shopId = "A1111";
         char[] alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".toCharArray();
         Random random = new Random();
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < 100; i++) {
             StringBuilder sb = new StringBuilder();
             for (int j = 0; j < 12; j++) {
                 int index = random.nextInt(26);
