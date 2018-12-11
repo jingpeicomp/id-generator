@@ -77,7 +77,7 @@ public class TimeNumberHidingGeneratorTest {
         Long originNumber = 14825847997L;
         String lastStr = null, str = null;
         int i = 0;
-        while (i++ < 10) {
+        while (i++ < 4) {
             if (null != str) {
                 Assert.assertEquals(originNumber, generator.parse(str));
             }

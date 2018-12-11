@@ -3,7 +3,6 @@ package com.jinpei.id.generator;
 import lombok.extern.slf4j.Slf4j;
 
 import java.text.SimpleDateFormat;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.TimeZone;
 
@@ -221,8 +220,8 @@ public class CardIdGenerator {
 
         Long timestamp = Long.parseLong(bitString.substring(bitLength - timeOffset - timeBits, bitLength - timeOffset), 2);
         long currentStamp = System.currentTimeMillis() / 1000 - startTimeStamp;
-        long timeDelta = timestamp - currentStamp;
-        return timeDelta <= 3600 && timeDelta > -3600;
+        long timeDelta = currentStamp - timestamp;
+        return timeDelta > -3600;
     }
 
     /**
@@ -325,13 +324,5 @@ public class CardIdGenerator {
         }
         validationCode = validationCode * 9;
         return validationCode % maxCode;
-    }
-
-    public static void main(String[] args) {
-        CardIdGenerator cardIdGenerator = new CardIdGenerator();
-        Long id = cardIdGenerator.generate();
-        System.out.println(id);
-        System.out.println(cardIdGenerator.validate(id));
-        System.out.println(Arrays.toString(cardIdGenerator.parse(id)));
     }
 }

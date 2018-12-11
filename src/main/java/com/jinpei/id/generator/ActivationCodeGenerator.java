@@ -202,7 +202,7 @@ public class ActivationCodeGenerator {
         long originCode = originId + totalCode;
 
         //编码序号
-        int encodeIndex = (int) (shopCode + System.currentTimeMillis()) % 26;
+        int encodeIndex = (int) ((shopCode + System.currentTimeMillis()) % 26);
         String originCodeString = Long.toString(originCode, 26);
         StringBuilder sb = new StringBuilder();
         sb.append(alphabet[encodeIndex]);
@@ -234,9 +234,6 @@ public class ActivationCodeGenerator {
             long shopCode = getShopCode(shopId);
             String shopCodeBitString = bitString.substring(0, bitLength - shopOffset);
             long parseShopCode = Long.parseLong(shopCodeBitString, 2);
-            if (shopCode == parseShopCode) {
-                System.out.println(code);
-            }
             return shopCode == parseShopCode;
         } catch (Exception e) {
             return false;
@@ -257,7 +254,6 @@ public class ActivationCodeGenerator {
             String cardIdBitString = bitString.substring(bitString.length() - cardIdBits);
             long parseCardIdCode = Long.parseLong(cardIdBitString, 2);
             long cardIdCode = getValidationCode(cardId, maxCardIdCode);
-
             return parseCardIdCode == cardIdCode;
         } catch (Exception e) {
             return false;
@@ -336,8 +332,8 @@ public class ActivationCodeGenerator {
 
         Long timestamp = Long.parseLong(bitString.substring(bitLength - timeBits - timeOffset, bitLength - timeOffset), 2);
         long currentStamp = System.currentTimeMillis() / 1000 - startTimeStamp;
-        long timeDelta = timestamp - currentStamp;
-        return timeDelta <= 3600 && timeDelta > -3600;
+        long timeDelta = currentStamp - timestamp;
+        return timeDelta > -3600;
     }
 
     /**

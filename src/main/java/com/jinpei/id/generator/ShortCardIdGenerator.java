@@ -150,8 +150,8 @@ public class ShortCardIdGenerator {
 
         Long timestamp = Long.parseLong(bitString.substring(bitLength - timeOffset - timeBits, bitLength - timeOffset), 2);
         long currentStamp = System.currentTimeMillis() / 1000 - startTimeStamp;
-        long timeDelta = timestamp - currentStamp;
-        return timeDelta <= 3600 && timeDelta > -3600;
+        long timeDelta = currentStamp - timestamp;
+        return timeDelta > -3600;
     }
 
     /**

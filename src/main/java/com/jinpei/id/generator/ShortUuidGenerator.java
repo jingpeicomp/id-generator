@@ -54,11 +54,4 @@ public class ShortUuidGenerator {
 
         return shortUuid.toString();
     }
-
-    public static void main(String[] args) {
-        ShortUuidGenerator shortUuid = new ShortUuidGenerator();
-        for (int i = 0; i < 10; i++) {
-            System.out.println(shortUuid.generate());
-        }
-    }
 }
