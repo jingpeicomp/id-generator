@@ -72,7 +72,7 @@ public class TimeNumberHidingGeneratorTest {
         }
     }
 
-    @Test
+//    @Test
     public void timeGenerate() {
         Long originNumber = 14825847997L;
         String lastStr = null, str = null;
@@ -92,9 +92,9 @@ public class TimeNumberHidingGeneratorTest {
     }
 
     private TimeNumberHidingGenerator createGenerator() {
-        String alphabetsStr = "0381592647,1270856349,4685109372,3904682157,7316492805,3645927810,1803756249,6153940728,2905437861,7968012435";
-        return new TimeNumberHidingGenerator("abcdefj11p23710837e]q222rqrqweqe",
-                "!@#$&123frwq", 10, alphabetsStr);
+        String alphabetsStr = "0389215647,1285706349,3724685109,3904682157,7314926805,3648592710,1037856249,6153974028,2978054361,7129680435";
+        return new TimeNumberHidingGenerator("uuhhgfj11p23710837e]q2ytrqrqweqe",
+                "!@#$&123f*&^", 10, alphabetsStr);
     }
 
     /**

@@ -14,9 +14,9 @@ import java.util.TimeZone;
 public class CardIdGenerator {
 
     /**
-     * 时间bit数，时间的单位为秒，31 bit位时间可以表示68年
+     * 时间bit数，时间的单位为秒，30 bit位时间可以表示34年
      */
-    private int timeBits = 31;
+    private int timeBits = 30;
 
     /**
      * 机器编码bit数
@@ -31,7 +31,7 @@ public class CardIdGenerator {
     /**
      * 校验bit位数
      */
-    private int validationBits = 7;
+    private int validationBits = 8;
 
     /**
      * 上一次时间戳
@@ -84,9 +84,9 @@ public class CardIdGenerator {
     private int maxCode = 0;
 
     /**
-     * 开始时间，默认为2016-01-01
+     * 开始时间，默认为2018-01-01
      */
-    private String startTimeString = "2016-01-01 00:00:00";
+    private String startTimeString = "2018-01-01 00:00:00";
 
     /**
      * 起始时间戳
@@ -150,7 +150,7 @@ public class CardIdGenerator {
         this.sequenceBits = sequenceBits;
         this.validationBits = validationBits;
         this.machineId = machineId;
-        this.startTimeString = null == startTimeString ? "2016-01-01 00:00:00" : startTimeString;
+        this.startTimeString = null == startTimeString ? "2018-01-01 00:00:00" : startTimeString;
         init();
     }
 
@@ -322,7 +322,7 @@ public class CardIdGenerator {
         for (int number : numbers) {
             validationCode += number;
         }
-        validationCode = validationCode * 9;
+        validationCode = validationCode * 7;
         return validationCode % maxCode;
     }
 }

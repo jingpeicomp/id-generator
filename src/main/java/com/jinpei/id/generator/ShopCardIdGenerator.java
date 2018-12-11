@@ -83,9 +83,9 @@ public class ShopCardIdGenerator {
     private long maxShopCode = 0L;
 
     /**
-     * 开始时间，默认为2016-01-01
+     * 开始时间，默认为2018-01-01
      */
-    private String startTimeString = "2016-01-01 00:00:00";
+    private String startTimeString = "2018-01-01 00:00:00";
 
     /**
      * 起始时间戳
@@ -138,7 +138,7 @@ public class ShopCardIdGenerator {
         this.sequenceBits = sequenceBits;
         this.validationBits = validationBits;
         this.machineId = machineId;
-        this.startTimeString = null == startTimeString ? "2016-01-01 00:00:00" : startTimeString;
+        this.startTimeString = null == startTimeString ? "2018-01-01 00:00:00" : startTimeString;
         init();
     }
 
@@ -344,7 +344,7 @@ public class ShopCardIdGenerator {
         for (int number : numbers) {
             validationCode += number;
         }
-        validationCode *= 9;
+        validationCode *= 7;
         return validationCode % maxCode;
     }
 

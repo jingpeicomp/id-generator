@@ -72,7 +72,7 @@ public class SecureActivationCodeGenerator {
      *
      * @return 32组字符编码
      */
-    public String generateAlphabets() {
+    public static String generateAlphabets() {
         String template = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
         List<Character> templateCharList = new ArrayList<>();
         for (char currentChar : template.toCharArray()) {

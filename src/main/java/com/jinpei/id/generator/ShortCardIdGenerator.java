@@ -77,9 +77,9 @@ public class ShortCardIdGenerator {
     private int maxCode = 0;
 
     /**
-     * 开始时间，默认为2016-01-01
+     * 开始时间，默认为2018-01-01
      */
-    private String startTimeString = "2016-01-01 00:00:00";
+    private String startTimeString = "2018-01-01 00:00:00";
 
     /**
      * 起始时间戳
@@ -249,7 +249,7 @@ public class ShortCardIdGenerator {
         for (int number : numbers) {
             validationCode += number;
         }
-        validationCode = validationCode * 9;
+        validationCode = validationCode * 7;
         return validationCode % maxCode;
     }
 

@@ -16,7 +16,7 @@ public class ActivationCodeGenerator {
     /**
      * 编码
      */
-    private char[] alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".toCharArray();
+    private char[] alphabet = "GJMNHIORSKLTUVWABCDEFXYPQZ".toCharArray();
 
     /**
      * 时间bit数，时间的单位为秒，29 bit位时间可以表示17年
@@ -104,9 +104,9 @@ public class ActivationCodeGenerator {
     private long maxCardIdCode = 0L;
 
     /**
-     * 开始时间，默认为2017-01-01
+     * 开始时间，默认为2018-01-01
      */
-    private String startTimeString = "2017-01-01 00:00:00";
+    private String startTimeString = "2018-01-01 00:00:00";
 
     /**
      * 起始时间戳
@@ -137,7 +137,7 @@ public class ActivationCodeGenerator {
      * @param validationBits  校验bit位数
      * @param cardIdBits      卡号校验位
      * @param machineId       机器编号
-     * @param startTimeString 开始时间，默认为2016-01-01
+     * @param startTimeString 开始时间，默认为2018-01-01
      */
     public ActivationCodeGenerator(int timeBits, int machineBits, int sequenceBits, int validationBits, int cardIdBits,
                                    int machineId, String startTimeString) {
@@ -160,7 +160,7 @@ public class ActivationCodeGenerator {
         this.sequenceBits = sequenceBits;
         this.validationBits = validationBits;
         this.machineId = machineId;
-        this.startTimeString = null == startTimeString ? "2016-01-01 00:00:00" : startTimeString;
+        this.startTimeString = null == startTimeString ? "2018-01-01 00:00:00" : startTimeString;
         init();
     }
 
@@ -419,7 +419,7 @@ public class ActivationCodeGenerator {
         for (int number : numbers) {
             validationCode += number;
         }
-        validationCode *= 9;
+        validationCode *= 7;
         return validationCode % maxValue;
     }
 

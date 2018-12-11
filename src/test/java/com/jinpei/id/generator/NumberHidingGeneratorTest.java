@@ -76,8 +76,8 @@ public class NumberHidingGeneratorTest {
     }
 
     private NumberHidingGenerator createGenerator() {
-        return new NumberHidingGenerator("abcdefj11p23710837e]q222rqrqweqe",
-                "!@#$&123frwq", 10, alphabetsStr);
+        return new NumberHidingGenerator("uyssffj11p23710837e]q222rqrqweqe",
+                "!@#$&**3frwq", 10, alphabetsStr);
     }
 
     /**
