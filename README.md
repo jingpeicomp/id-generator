@@ -31,9 +31,9 @@ ID固定为19位，64bit。 可用于各种业务系统的ID生成。格式为�
 
 即ID生成最大支持1024台负载，每台负载每毫秒可以生成4096个ID，这样每台负载每秒可以产生40万ID。
 
-生成器代码[LongIdGenerator](src/main/java/com/qianmi/id/generator/LongIdGenerator.java)
+生成器代码[LongIdGenerator](src/main/java/com/jinpei/id/generator/LongIdGenerator.java)
 
-详细示例代码：[LongIdGeneratorTest](src/test/java/com/qianmi/id/generator/LongIdGeneratorTest.java)
+详细示例代码：[LongIdGeneratorTest](src/test/java/com/jinpei/id/generator/LongIdGeneratorTest.java)
 
 ### 1.2 生成ID
 
@@ -79,9 +79,9 @@ public void parse() {
 
 UUID最长22位。 排除掉1、l和I，0和o易混字符。本质是将UUID（32位16进制整数）转换为22位57进制数。格式为：”MCyYSL4uvizAhvem4jYXW6“。
 
-生成器代码[ShortUuidGenerator](src/main/java/com/qianmi/id/generator/ShortUuidGenerator.java)
+生成器代码[ShortUuidGenerator](src/main/java/com/jinpei/id/generator/ShortUuidGenerator.java)
 
-详细示例代码：[ShortUuidGeneratorTest](src/test/java/com/qianmi/id/generator/ShortUuidGeneratorTest.java)
+详细示例代码：[ShortUuidGeneratorTest](src/test/java/com/jinpei/id/generator/ShortUuidGeneratorTest.java)
 
 ### 2.2 生成UUID
 
@@ -114,9 +114,9 @@ public void generate() {
 
 时间戳、机器编号、序号和校验位的bit位数支持业务自定义，方便业务定制自己的生成器。
 
-生成器代码[CardIdGenerator](src/main/java/com/qianmi/id/generator/CardIdGenerator.java)
+生成器代码[CardIdGenerator](src/main/java/com/jinpei/id/generator/CardIdGenerator.java)
 
-详细示例代码：[CardIdGeneratorTest](src/test/java/com/qianmi/id/generator/CardIdGeneratorTest.java)
+详细示例代码：[CardIdGeneratorTest](src/test/java/com/jinpei/id/generator/CardIdGeneratorTest.java)
 
 ### 3.2 生成卡号
 
@@ -190,9 +190,9 @@ public void parse() {
 
 时间戳、机器编号、序号和校验位的bit位数支持业务自定义，方便业务定制自己的生成器。
 
-生成器代码[ShopCardIdGenerator](src/main/java/com/qianmi/id/generator/ShopCardIdGenerator.java)
+生成器代码[ShopCardIdGenerator](src/main/java/com/jinpei/id/generator/ShopCardIdGenerator.java)
 
-详细示例代码：[ShopCardIdGeneratorTest](src/test/java/com/qianmi/id/generator/ShopCardIdGeneratorTest.java)
+详细示例代码：[ShopCardIdGeneratorTest](src/test/java/com/jinpei/id/generator/ShopCardIdGeneratorTest.java)
 
 ### 4.2 生成卡号
 
@@ -266,9 +266,9 @@ public void parse() {
 
 即卡号生成最大支持7台负载；每台负载每秒钟可以生成最少236，最多256个卡号。
 
-生成器代码[ShortCardIdGenerator](src/main/java/com/qianmi/id/generator/ShortCardIdGenerator.java)
+生成器代码[ShortCardIdGenerator](src/main/java/com/jinpei/id/generator/ShortCardIdGenerator.java)
 
-详细示例代码：[ShortCardIdGeneratorTest](src/test/java/com/qianmi/id/generator/ShortCardIdGeneratorTest.java)
+详细示例代码：[ShortCardIdGeneratorTest](src/test/java/com/jinpei/id/generator/ShortCardIdGeneratorTest.java)
 
 ### 5.2 生成卡号
 
@@ -337,9 +337,9 @@ public void parse() {
 
 时间戳、机器编号、序号和校验位的bit位数支持业务自定义，方便业务定制自己的生成器。
 
-激活码代码[ActivationCodeGenerator](src/main/java/com/qianmi/id/generator/ActivationCodeGenerator.java)
+激活码代码[ActivationCodeGenerator](src/main/java/com/jinpei/id/generator/ActivationCodeGenerator.java)
 
-详细示例代码：[ActivationCodeGeneratorTest](src/test/java/com/qianmi/id/generator/ActivationCodeGeneratorTest.java)
+详细示例代码：[ActivationCodeGeneratorTest](src/test/java/com/jinpei/id/generator/ActivationCodeGeneratorTest.java)
 
 ### 6.2 激活码生成流程
 
@@ -449,9 +449,9 @@ public void parse() {
 
 该激活码无需密码，凭码就可以直接激活消费。
 
-激活码代码[SecureActivationCodeGenerator](src/main/java/com/qianmi/id/generator/SecureActivationCodeGenerator.java)
+激活码代码[SecureActivationCodeGenerator](src/main/java/com/jinpei/id/generator/SecureActivationCodeGenerator.java)
 
-详细示例代码：[SecureActivationCodeGeneratorTest](src/test/java/com/qianmi/id/generator/SecureActivationCodeGeneratorTest.java)
+详细示例代码：[SecureActivationCodeGeneratorTest](src/test/java/com/jinpei/id/generator/SecureActivationCodeGeneratorTest.java)
 
 ### 7.1 说明
 
@@ -559,9 +559,9 @@ public void validate() {
 
 本算法支持对不大于12位的正整数（即1000,000,000,000）进行加密，输出固定长度为18位的数字字符串；支持解密。
 
-加密器代码[NumberHidingGenerator](src/main/java/com/qianmi/id/generator/NumberHidingGenerator.java)
+加密器代码[NumberHidingGenerator](src/main/java/com/jinpei/id/generator/NumberHidingGenerator.java)
 
-详细示例代码：[NumberHidingGeneratorTest](src/test/java/com/qianmi/id/generator/NumberHidingGeneratorTest.java)
+详细示例代码：[NumberHidingGeneratorTest](src/test/java/com/jinpei/id/generator/NumberHidingGeneratorTest.java)
 
 ### 8.1 说明
 
@@ -664,9 +664,9 @@ public void parse() {
 
 本算法支持对不大于12位的正整数（即1000,000,000,000）混合时间信息进行加密，输出固定长度为20位的数字字符串；支持解密。
 
-加密器代码[TimeNumberHidingGenerator](src/main/java/com/qianmi/id/generator/TimeNumberHidingGenerator.java)
+加密器代码[TimeNumberHidingGenerator](src/main/java/com/jinpei/id/generator/TimeNumberHidingGenerator.java)
 
-详细示例代码：[TimeNumberHidingGeneratorTest](src/test/java/com/qianmi/id/generator/TimeNumberHidingGeneratorTest.java)
+详细示例代码：[TimeNumberHidingGeneratorTest](src/test/java/com/jinpei/id/generator/TimeNumberHidingGeneratorTest.java)
 
 ### 9.1 说明
 
