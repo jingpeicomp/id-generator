@@ -6,25 +6,27 @@ import java.util.Arrays;
 
 /**
  * ChaCha20算法
- * Created by liuzhaoming on 2018/1/30.
+ *
+ * @author liuzhaoming
+ * @date 2018/1/30
  */
 public class ChaCha20 {
-    /*
+    /**
      * Key size in byte
      */
     private static final int KEY_SIZE = 32;
 
-    /*
+    /**
      * Nonce size in byte (reference implementation)
      */
     private static final int NONCE_SIZE_REF = 8;
 
-    /*
+    /**
      * Nonce size in byte (IETF draft)
      */
     private static final int NONCE_SIZE_IETF = 12;
 
-    private int[] matrix = new int[16];
+    private final int[] matrix = new int[16];
 
     public ChaCha20(String keyString, String nonceString, int counter) {
         if (null == keyString
@@ -63,6 +65,7 @@ public class ChaCha20 {
         }
     }
 
+    @SuppressWarnings("unused")
     public ChaCha20(byte[] key, byte[] nonce, int counter) {
         if (key.length != KEY_SIZE) {
             throw new IllegalArgumentException();
@@ -81,7 +84,7 @@ public class ChaCha20 {
         this.matrix[10] = littleEndianToInt(key, 24);
         this.matrix[11] = littleEndianToInt(key, 28);
 
-        if (nonce.length == NONCE_SIZE_REF) {        // reference implementation
+        if (nonce.length == NONCE_SIZE_REF) {
             this.matrix[12] = 0;
             this.matrix[13] = 0;
             this.matrix[14] = littleEndianToInt(nonce, 0);
@@ -137,7 +140,9 @@ public class ChaCha20 {
         int i, dpos = 0, spos = 0;
 
         while (len > 0) {
-            for (i = 16; i-- > 0; ) x[i] = this.matrix[i];
+            for (i = 16; i-- > 0; ) {
+                x[i] = this.matrix[i];
+            }
             for (i = 20; i > 0; i -= 2) {
                 quarterRound(x, 0, 4, 8, 12);
                 quarterRound(x, 1, 5, 9, 13);

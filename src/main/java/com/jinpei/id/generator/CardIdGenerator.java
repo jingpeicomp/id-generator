@@ -1,22 +1,34 @@
 package com.jinpei.id.generator;
 
+import com.jinpei.id.common.utils.IdUtils;
+import com.jinpei.id.generator.base.CardIdGeneratorable;
 import lombok.extern.slf4j.Slf4j;
-
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.TimeZone;
 
 /**
  * 16位数字卡号生成器
- * Created by liuzhaoming on 2017/11/22.
+ * 卡号固定为16位，53bit，格式如下（各字段位数可通过全参构造函数调整）：
+ * +=======================================================================
+ * | 3bit卡类型 | 31bit时间戳 | 3bit机器编号  | 9bit序号 | 7bit卡号校验位 |
+ * +=======================================================================
+ * <p>
+ * 3 bit 卡类型，支持8种卡类型。
+ * 31 bit 的秒时间戳支持68年
+ * 9 bit 序号支持512个序号
+ * 3 bit 机器编号支持8台负载
+ * <p>
+ * 即卡号生成最大支持8台负载，每台负载每秒钟可以生成512个卡号。
+ * 时间戳、机器编号、序号和校验位的bit位数支持业务自定义，方便业务定制自己的生成器。
+ *
+ * @author liuzhaoming
+ * @date 2017/11/22
  */
 @Slf4j
-public class CardIdGenerator {
-
+@SuppressWarnings("UnusedAssignment")
+public class CardIdGenerator implements CardIdGeneratorable {
     /**
-     * 时间bit数，时间的单位为秒，30 bit位时间可以表示34年
+     * 时间bit数，时间的单位为秒，31 bit位时间可以表示68年
      */
-    private int timeBits = 30;
+    private int timeBits = 31;
 
     /**
      * 机器编码bit数
@@ -31,7 +43,7 @@ public class CardIdGenerator {
     /**
      * 校验bit位数
      */
-    private int validationBits = 8;
+    private int validationBits = 7;
 
     /**
      * 上一次时间戳
@@ -84,14 +96,24 @@ public class CardIdGenerator {
     private int maxCode = 0;
 
     /**
-     * 开始时间，默认为2018-01-01
+     * 开始时间，默认为2019-01-01
      */
-    private String startTimeString = "2018-01-01 00:00:00";
+    private String startTimeString = "2019-01-01 00:00:00";
 
     /**
      * 起始时间戳
      */
     private long startTimeStamp = 0L;
+
+    /**
+     * 最大ID
+     */
+    private static final long MAX_ID = 9999999999999999L;
+
+    /**
+     * 最小ID
+     */
+    private static final long MIN_ID = 1000000000000000L;
 
     public CardIdGenerator() {
         this(1, 1);
@@ -121,7 +143,7 @@ public class CardIdGenerator {
      * @param sequenceBits    每秒序列bit数
      * @param validationBits  校验bit位数
      * @param machineId       机器编号
-     * @param startTimeString 开始时间，默认为2016-01-01
+     * @param startTimeString 开始时间
      * @param defaultSystem   默认系统编号
      */
     public CardIdGenerator(int timeBits, int machineBits, int sequenceBits, int validationBits, int machineId,
@@ -150,10 +172,11 @@ public class CardIdGenerator {
         this.sequenceBits = sequenceBits;
         this.validationBits = validationBits;
         this.machineId = machineId;
-        this.startTimeString = null == startTimeString ? "2018-01-01 00:00:00" : startTimeString;
+        if (null != startTimeString) {
+            this.startTimeString = startTimeString;
+        }
         init();
     }
-
 
     /**
      * 生成16位卡号
@@ -175,9 +198,9 @@ public class CardIdGenerator {
             throw new IllegalArgumentException("The system must be in [1, 7]");
         }
 
-        long curStamp = getNewStamp();
+        long curStamp = getCurrentSecond();
         if (curStamp < lastStamp) {
-            throw new IllegalArgumentException("Clock moved backwards. Refusing to generate id");
+            throw new IllegalArgumentException("Clock moved backwards. Refusing to generate id.");
         }
 
         if (curStamp == lastStamp) {
@@ -194,7 +217,7 @@ public class CardIdGenerator {
                 | machineId << machineOffset
                 | sequence << sequenceOffset;
 
-        int validationCode = getValidationCode(originId);
+        int validationCode = IdUtils.getValidationCode(originId, maxCode);
         return originId + validationCode;
     }
 
@@ -205,23 +228,11 @@ public class CardIdGenerator {
      * @return boolean 合法返回true，反之false
      */
     public boolean validate(long id) {
-        if (id > 9999999999999999L || id < 1000000000000000L) {
+        if (id > MAX_ID || id < MIN_ID) {
             return false;
         }
 
-        String bitString = Long.toBinaryString(id);
-        int bitLength = bitString.length();
-        String codeBitString = bitString.substring(bitLength - validationBits);
-        int validationCode = Integer.parseInt(codeBitString, 2);
-        long originId = id - validationCode;
-        if (validationCode != getValidationCode(originId)) {
-            return false;
-        }
-
-        Long timestamp = Long.parseLong(bitString.substring(bitLength - timeOffset - timeBits, bitLength - timeOffset), 2);
-        long currentStamp = System.currentTimeMillis() / 1000 - startTimeStamp;
-        long timeDelta = currentStamp - timestamp;
-        return timeDelta > -3600;
+        return validateCode(id, startTimeStamp, timeBits, timeOffset, validationBits, maxCode);
     }
 
     /**
@@ -237,14 +248,14 @@ public class CardIdGenerator {
 
         String bitString = Long.toBinaryString(id);
         int bitLength = bitString.length();
-        Long system = Long.parseLong(bitString.substring(0, bitLength - systemOffset), 2);
-        Long timestamp = Long.parseLong(bitString.substring(bitLength - timeOffset - timeBits, bitLength - timeOffset),
+        long system = Long.parseLong(bitString.substring(0, bitLength - systemOffset), 2);
+        long timestamp = Long.parseLong(bitString.substring(bitLength - timeOffset - timeBits, bitLength - timeOffset),
                 2);
-        Long machineId = Long.parseLong(bitString.substring(bitLength - machineOffset - machineBits,
+        long machineId = Long.parseLong(bitString.substring(bitLength - machineOffset - machineBits,
                 bitLength - machineOffset), 2);
-        Long sequence = Long.parseLong(bitString.substring(bitLength - sequenceOffset - sequenceBits,
+        long sequence = Long.parseLong(bitString.substring(bitLength - sequenceOffset - sequenceBits,
                 bitLength - sequenceOffset), 2);
-        return new Long[]{system, timestamp, machineId, sequence};
+        return new Long[]{system, (timestamp + startTimeStamp) * 1000, machineId, sequence};
     }
 
     /**
@@ -256,27 +267,8 @@ public class CardIdGenerator {
         timeOffset = machineOffset + machineBits;
         systemOffset = timeOffset + timeBits;
         maxSequence = ~(-1L << sequenceBits);
-        startTimeStamp = getTimeStamp(startTimeString);
+        startTimeStamp = IdUtils.getTimeStampSecond(startTimeString);
         maxCode = ~(-1 << validationBits);
-    }
-
-    /**
-     * 获取起始时间戳，因为要兼容java7，使用Date对象
-     *
-     * @param dateStr 时间字符串，格式由startTimeFormatter指定
-     * @return 时间戳
-     */
-    private long getTimeStamp(String dateStr) {
-        try {
-            SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-            formatter.setTimeZone(TimeZone.getTimeZone("GMT+0800"));
-            Date startDate = formatter.parse(dateStr);
-            return startDate.getTime() / 1000;
-        } catch (Exception e) {
-            log.error("Cannot get time stamp string {}, the invalid date format is yyyy-MM-dd HH:mm:ss ,please check!",
-                    dateStr);
-            return 1510329600L;
-        }
     }
 
     /**
@@ -284,7 +276,7 @@ public class CardIdGenerator {
      *
      * @return 时间戳（秒）
      */
-    private long getNewStamp() {
+    private long getCurrentSecond() {
         return System.currentTimeMillis() / 1000;
     }
 
@@ -294,35 +286,11 @@ public class CardIdGenerator {
      * @return 时间戳（秒）
      */
     private long getNextSecond() {
-        long second = getNewStamp();
+        long second = getCurrentSecond();
         while (second <= lastStamp) {
-            second = getNewStamp();
+            IdUtils.sleep(20);
+            second = getCurrentSecond();
         }
         return second;
-    }
-
-    /**
-     * 获取校验码
-     *
-     * @param originId 原始卡号
-     * @return 校验码
-     */
-    private int getValidationCode(long originId) {
-        String strOriginId = String.valueOf(originId);
-        int[] numbers = new int[strOriginId.length()];
-        for (int i = 0; i < strOriginId.length(); i++) {
-            numbers[i] = Character.getNumericValue(strOriginId.charAt(i));
-        }
-        for (int i = numbers.length - 2; i >= 0; i -= 2) {
-            numbers[i] <<= 1;
-            numbers[i] = numbers[i] / 10 + numbers[i] % 10;
-        }
-
-        int validationCode = 0;
-        for (int number : numbers) {
-            validationCode += number;
-        }
-        validationCode = validationCode * 7;
-        return validationCode % maxCode;
     }
 }

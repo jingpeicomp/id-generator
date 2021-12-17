@@ -1,5 +1,6 @@
 package com.jinpei.id.generator;
 
+import com.jinpei.id.common.utils.IdUtils;
 import com.jinpei.id.common.algorithm.ChaCha20;
 import com.jinpei.id.common.algorithm.Hmac;
 
@@ -7,14 +8,25 @@ import java.math.BigInteger;
 import java.util.Arrays;
 
 /**
- * 带时间戳校验的加密数字，将最长不超过11位的整数对称加密为20位数字字符串
- * <p>
+ * 带时间戳校验的加密数字，将最长不超过12位的整数加密为20位数字字符串，支持解密
  * 很多场景下为了信息隐蔽需要对数字进行加密，比如用户的付款码；并且需要支持解密。
- * <p>
  * 加密结果混入了时间信息，有效时间为1分钟，超过有效期加密结果会失效。
- * <p>
  * 本算法支持对不大于12位的正整数（即1000,000,000,000）混合时间信息进行加密，输出固定长度为20位的数字字符串；支持解密。
- * Created by liuzhaoming on 2018/9/12.
+ * <p>
+ * 说明
+ * 1.加密字符串固定20位数字，原始待加密正整数不大于12位
+ * 2.加密字符串本质上是一个63bit的正整数，通过一定的编码规则转换而来。
+ * 3.为了安全，使用者在创建生成器的时候，需要提供10套随机编码规则，以数字1来说，可能在“5032478619”编码规则中代表数字8，在"2704168539"编码规则中代表数字4。即每个字符都可以代表0-9的任一数字。
+ * 4.具体使用何种编码规则，是通过原始正整数进行ChaCha20加密后的随机数hash决定的。
+ * 5.为了方便开发者使用，提供了随机生成编码的静态方法。
+ * <p>
+ * 加密后的数字字符串由编码规则+密文报文体组成，密文由63bit组成，可转化为19位数，编码规则为一位数字:
+ * +===========================================================================================
+ * | 1位编码规则 | 37bit原始数字 |  15bit原始数字加当前时间加密生成的密文 |  11bit当天时间分钟信息    |
+ * +===========================================================================================
+ *
+ * @author liuzhaoming
+ * @date 2018/9/12
  */
 public class TimeNumberHidingGenerator extends NumberHidingGenerator {
 
@@ -28,6 +40,10 @@ public class TimeNumberHidingGenerator extends NumberHidingGenerator {
      */
     private static final long MINUTE_STAMP_DIGIT = 100000000L;
 
+    /**
+     * 待加密的最大数
+     */
+    private static final long MAX_NUMBER = 100000000000L;
 
     /**
      * 构造函数
@@ -47,8 +63,9 @@ public class TimeNumberHidingGenerator extends NumberHidingGenerator {
      * @param originNumber 原始正整数，不大于100,000,000,000
      * @return 20位加密数值字符串
      */
+    @Override
     public String generate(Long originNumber) {
-        if (originNumber < 0 || originNumber >= 100000000000L) {
+        if (originNumber < 0 || originNumber >= MAX_NUMBER) {
             throw new IllegalArgumentException("The number should be between [0, 100000000000)");
         }
 
@@ -59,21 +76,13 @@ public class TimeNumberHidingGenerator extends NumberHidingGenerator {
         byte[] randomBytes = chaCha20.encrypt(originNumber, 512);
         String encryptedHmacBits = encryptHmacBits(originNumber, timeStamp, randomBytes);
 
-        String originNumberBits = toBits(originNumber, 37);
-        String currentMinuteStampInDayBits = toBits(currentMinuteStampInDay, 11);
+        String originNumberBits = IdUtils.longToBits(originNumber, 37);
+        String currentMinuteStampInDayBits = IdUtils.intToBits(currentMinuteStampInDay, 11);
         String totalBits = originNumberBits + encryptedHmacBits + currentMinuteStampInDayBits;
         BigInteger generateNumber = new BigInteger(totalBits, 2);
-        String generateNumberString = bigInteger2String(generateNumber, 19);
+        String generateNumberString = IdUtils.bigIntegerToFixedString(generateNumber, 19);
 
-        int coderIndex = getCoderIndex(randomBytes);
-        char[] alphabet = alphabets[coderIndex];
-        StringBuilder codeSb = new StringBuilder();
-        for (char charValue : generateNumberString.toCharArray()) {
-            int index = Integer.parseInt(String.valueOf(charValue));
-            codeSb.append(alphabet[index]);
-        }
-
-        return "" + alphabets[0][coderIndex] + codeSb.toString();
+        return encode(randomBytes, generateNumberString);
     }
 
     /**
@@ -82,23 +91,17 @@ public class TimeNumberHidingGenerator extends NumberHidingGenerator {
      * @param hidingNumberStr 20位加密数字字符串
      * @return 返回正整数，不合法的话返回null
      */
+    @Override
     public Long parse(String hidingNumberStr) {
-        if (null == hidingNumberStr || hidingNumberStr.length() != 20 || !isCharValid(hidingNumberStr)) {
+        if (null == hidingNumberStr || hidingNumberStr.length() != 20 || !IdUtils.isNumeric(hidingNumberStr)) {
             return null;
         }
 
-        int coderIndex = parseCoderIndex(hidingNumberStr);
-        if (coderIndex < 0) {
+        StringBuilder numberSb = decode(hidingNumberStr);
+        if (null == numberSb) {
             return null;
         }
-
-        char[] alphabet = alphabets[coderIndex];
-        StringBuilder numberSb = new StringBuilder();
-        for (char currentChar : hidingNumberStr.substring(1).toCharArray()) {
-            int index = getIndex(alphabet, currentChar);
-            numberSb.append(index);
-        }
-        String bitsString = toBits(Long.valueOf(numberSb.toString()), 63);
+        String bitsString = IdUtils.longToBits(Long.parseLong(numberSb.toString()), 63);
         Long originNumber = Long.valueOf(bitsString.substring(0, 37), 2);
         int originMinuteStampInDay = Integer.valueOf(bitsString.substring(52), 2);
         long timeMills = System.currentTimeMillis();
@@ -126,17 +129,12 @@ public class TimeNumberHidingGenerator extends NumberHidingGenerator {
     private boolean checkTimeEffective(int originMinuteStampInDay, long timeMills) {
         int currentMinutesStampInDay = getCurrentMinuteStampInDay(timeMills);
         if (currentMinutesStampInDay >= originMinuteStampInDay) {
-            if (currentMinutesStampInDay - originMinuteStampInDay > 1) {
-                //已经过期
-                return false;
-            }
-        } else {//已经过了一天
-            if (currentMinutesStampInDay + 1440 - originMinuteStampInDay > 1) {
-                //已经过期
-                return false;
-            }
+            //判断是否超过一分钟
+            return currentMinutesStampInDay - originMinuteStampInDay <= 1;
+        } else {
+            //已经过了一天，是否超过一分钟
+            return currentMinutesStampInDay + 1440 - originMinuteStampInDay <= 1;
         }
-        return true;
     }
 
     /**
@@ -150,32 +148,21 @@ public class TimeNumberHidingGenerator extends NumberHidingGenerator {
      * @return 是否合法
      */
     private boolean checkSecurity(Long originNumber, int originMinuteStampInDay, long timeMills, String originHmacBits, byte[] randomBytes) {
+        long todayMinuteStamp = getTodayMinuteStamp(timeMills);
+        long minuteStamp = todayMinuteStamp + originMinuteStampInDay;
+        String encryptedHmacBits = encryptHmacBits(originNumber, minuteStamp, randomBytes);
         if (originMinuteStampInDay < 1439) {
-            long todayMinuteStamp = getTodayMinuteStamp(timeMills);
-            long minuteStamp = todayMinuteStamp + originMinuteStampInDay;
-            String encryptedHmacBits = encryptHmacBits(originNumber, minuteStamp, randomBytes);
-            if (originHmacBits.equals(encryptedHmacBits)) {
-                return true;
-            } else {
-                return false;
-            }
+            return originHmacBits.equals(encryptedHmacBits);
         } else {//可能跨天
-            long todayMinuteStamp = getTodayMinuteStamp(timeMills);
-            long minuteStamp = todayMinuteStamp + originMinuteStampInDay;
-            String encryptedHmacBits = encryptHmacBits(originNumber, minuteStamp, randomBytes);
             if (originHmacBits.equals(encryptedHmacBits)) {
                 return true;
             } else {
                 long lastDayMinuteStamp = getTodayMinuteStamp(timeMills);
                 minuteStamp = lastDayMinuteStamp + originMinuteStampInDay;
                 encryptedHmacBits = encryptHmacBits(originNumber, minuteStamp, randomBytes);
-                if (originHmacBits.equals(encryptedHmacBits)) {
-                    return true;
-                }
+                return originHmacBits.equals(encryptedHmacBits);
             }
         }
-
-        return false;
     }
 
     /**
@@ -188,14 +175,11 @@ public class TimeNumberHidingGenerator extends NumberHidingGenerator {
     protected String encryptHmacBits(Long originNumber, long minuteStamp, byte[] randomBytes) {
         byte[] hmacKey = Arrays.copyOfRange(randomBytes, 0, 256);
         byte[] randomHmacValue = Arrays.copyOfRange(randomBytes, 256, 512);
-        Long number = minuteStamp * MINUTE_STAMP_DIGIT + originNumber;
-        byte[] originNumberBytes = toBytes(number);
-        byte[] originHmacValue = new byte[randomHmacValue.length + originNumberBytes.length];
-        System.arraycopy(randomHmacValue, 0, originHmacValue, 0, randomHmacValue.length);
-        System.arraycopy(originNumberBytes, 0, originHmacValue, randomHmacValue.length, originNumberBytes.length);
+        long number = minuteStamp * MINUTE_STAMP_DIGIT + originNumber;
+        byte[] originHmacValue = combineHmacInput(randomHmacValue, number);
         Hmac hmac = new Hmac(hmacKey);
         byte[] encryptedHmacValue = hmac.encrypt(originHmacValue);
-        return toBits(encryptedHmacValue).substring(0, 15);
+        return IdUtils.byteArrayToBits(encryptedHmacValue).substring(0, 15);
     }
 
     /**
@@ -217,60 +201,5 @@ public class TimeNumberHidingGenerator extends NumberHidingGenerator {
     private long getTodayMinuteStamp(long currentTimeMills) {
         long minutes = (currentTimeMills - STANDARD_TIME_MILLS) / 60000;
         return minutes - minutes % 1440;
-    }
-
-    /**
-     * 获取昨天的标准分钟戳 从2018-01-01 00:00:00开始
-     *
-     * @param currentTimeMills 当前时间
-     * @return 标准分钟戳
-     */
-    private long getLastDayMinuteStamp(long currentTimeMills) {
-        return getTodayMinuteStamp(currentTimeMills) - 1;
-    }
-
-    /**
-     * 将数字转换为二进制字符串
-     *
-     * @param value 值
-     * @param len   二进制字符串长度
-     * @return 二进制字符串
-     */
-    protected String toBits(int value, int len) {
-        String binaryString = Integer.toBinaryString(value);
-        if (binaryString.length() > len) {
-            throw new IllegalArgumentException("Value is too large");
-        }
-
-        if (binaryString.length() < len) {
-            char[] appendChars = new char[len - binaryString.length()];
-            Arrays.fill(appendChars, '0');
-            return new String(appendChars) + binaryString;
-        }
-
-        return binaryString;
-    }
-
-    /**
-     * 将长整数转换为指定位数字符串，不满指定位前面添0
-     *
-     * @param number 不大于指定位的正整数
-     * @param length 指定位数
-     * @return 数字字符串
-     */
-    private String bigInteger2String(BigInteger number, int length) {
-        String str = number.toString();
-        if (str.length() > length) {
-            throw new IllegalArgumentException("Number length is large than " + length + ", number is " + number);
-        } else if (str.length() == length) {
-            return str;
-        } else {
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0, size = length - str.length(); i < size; i++) {
-                sb.append('0');
-            }
-            sb.append(str);
-            return sb.toString();
-        }
     }
 }

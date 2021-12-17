@@ -1,54 +1,51 @@
 package com.jinpei.id.generator;
 
+import com.jinpei.id.common.utils.IdUtils;
 import com.jinpei.id.common.algorithm.ChaCha20;
 import com.jinpei.id.common.algorithm.Hmac;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
- * 安全激活码，理论上不存在被破解的可能
- * 输入参数为店铺编号、卡号、序号
- * <p>
- * 用ChaCha20算法对序号加密，得到一个512字节的随机数
- * <p>
- * 将步骤2生成的随机数取前256字节作为HMAC算法的密钥
- * <p>
- * 将序号、店铺编号、步骤2生成的随机数的后256字节拼成字节数组
- * <p>
- * 用步骤3生成的HMAC对步骤4生成的字节数组进行加密
- * <p>
- * 将店铺编号编码为27bit，步骤5生成的字节数组取前18bit，拼成45bit报文
- * <p>
- * 步骤4生成的字节数组取前45bit报文M1，步骤6生成的45bit报文M2，将M1和M2进行异或运算
- * <p>
- * 根据序号得到30bit的明文，步骤7得到45bit密文，将明文和密文拼接成75bit的激活码主体
- * <p>
- * 用ChaCha20算法对卡号进行加密，得到的随机数按字节求和，然后对32取模
- * <p>
- * 根据步骤9的结果，得到一套base32的编码方式，对步骤8产生的75bit激活码主体进行编码，得到15位的32进制数（大写字母和数字，排除掉0O1I）
- * <p>
- * 步骤9得到的结果进行base32编码得到一位32进制数
- * <p>
- * 将步骤11和步骤10得到的结果拼在一起，得到16位的激活码
- * Created by liuzhaoming on 2018/1/30.
+ * 该激活码无需密码，凭码就可以直接激活消费。输入参数为店铺编号、卡号、序号
+ * 1.激活码固定16位，全大写字母和数字，排除掉易混字符0O、1I，一共32个字符。
+ * 2.激活码本质上是一个16*5=80bit的正整数，通过一定的编码规则转换成全大写字符和数字。
+ * 3.为了安全，使用者在创建生成器的时候，需要提供32套随机编码规则，以字符A来说，可能在“KMLVAPPGRABH”激活码中代表数字4，在"MONXCRRIUNVA"激活码中代表数字23。即每个字符都可以代表0-31的任一数字。
+ * 4.具体使用何种编码规则，是通过卡号进行ChaCha20加密后的随机数hash决定的。
+ * 激活码的正整数由80bit组成
+ * +========================================================
+ * | 5bit编码号 | 30bit序号明文 | 45bit序号、店铺编号生成的密文  |
+ * +========================================================
+ *
+ * @author liuzhaoming
+ * @date 2018/1/30
  */
 public class SecureActivationCodeGenerator {
 
-    private String chacha20Key;
+    private final String chacha20Key;
 
-    private String chacha20Nonce;
+    private final String chacha20Nonce;
 
-    private int chacha20Counter;
+    private final int chacha20Counter;
 
     /**
      * 编码
      */
     private char[][] alphabets;
+
+    /**
+     * 编码字符集
+     */
+    private final Set<Character> allowedChars;
+
+    /**
+     * 最大店铺ID
+     */
+    private static final long MAX_SHOP_ID = 134217727L;
 
     /**
      * 构造函数
@@ -63,39 +60,20 @@ public class SecureActivationCodeGenerator {
         this.chacha20Key = chacha20Key;
         this.chacha20Nonce = chacha20Nonce;
         this.chacha20Counter = chacha20Counter;
+        allowedChars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ".chars()
+                .mapToObj(c -> (char) c)
+                .collect(Collectors.toSet());
         parseAlphabets(alphabetsString);
     }
 
-
     /**
-     * 生成随机的32组字符编码
+     * 生成随机的32组字符编码，供应用初始化时使用
      *
      * @return 32组字符编码
      */
     public static String generateAlphabets() {
         String template = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
-        List<Character> templateCharList = new ArrayList<>();
-        for (char currentChar : template.toCharArray()) {
-            templateCharList.add(currentChar);
-        }
-
-        String[] alphabets = new String[32];
-        for (int i = 0; i < 32; i++) {
-            Collections.shuffle(templateCharList);
-            StringBuilder sb = new StringBuilder();
-            for (Character currentChar : templateCharList) {
-                sb.append(currentChar);
-            }
-            alphabets[i] = sb.toString();
-        }
-
-        StringBuilder sb = new StringBuilder();
-        for (String alphabet : alphabets) {
-            sb.append(alphabet);
-            sb.append(",");
-        }
-
-        return sb.substring(0, sb.length() - 1);
+        return IdUtils.generateAlphabets(template, 32);
     }
 
     /**
@@ -113,28 +91,17 @@ public class SecureActivationCodeGenerator {
         byte[] serializedIdBytes = toBytes(serializedId);
         byte[] shopIdBytes = toBytes(shopId);
         byte[] randomHmacValue = Arrays.copyOfRange(randomBytes, 256, 512);
-        byte[] originHmacValue = new byte[serializedIdBytes.length + shopIdBytes.length + randomHmacValue.length];
-        System.arraycopy(serializedIdBytes, 0, originHmacValue, 0, serializedIdBytes.length);
-        System.arraycopy(shopIdBytes, 0, originHmacValue, serializedIdBytes.length, shopIdBytes.length);
-        System.arraycopy(randomHmacValue, 0, originHmacValue, serializedIdBytes.length + shopIdBytes.length, randomHmacValue.length);
+        byte[] originHmacValue = combineOriginHmacValue(serializedIdBytes, shopIdBytes, randomHmacValue);
         Hmac hmac = new Hmac(hmacKey);
         byte[] encryptedHmacValue = hmac.encrypt(originHmacValue);
 
         String shopIdBits = getShopBits(shopId);
-        String encryptedHmacBits = toBits(encryptedHmacValue).substring(0, 18);
+        String encryptedHmacBits = IdUtils.byteArrayToBits(encryptedHmacValue).substring(0, 18);
         String tempPayloadBits = shopIdBits + encryptedHmacBits;
-        String originHmacValueBits = toBits(originHmacValue).substring(0, 45);
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < 45; i++) {
-            if (tempPayloadBits.charAt(i) == originHmacValueBits.charAt(i)) {
-                sb.append('0');
-            } else {
-                sb.append('1');
-            }
-        }
-        String encryptedPayloadBits = sb.toString();
+        String originHmacValueBits = IdUtils.byteArrayToBits(originHmacValue).substring(0, 45);
+        String encryptedPayloadBits = xor(tempPayloadBits, originHmacValueBits);
 
-        String serializedIdBits = toBits(serializedId, 30);
+        String serializedIdBits = IdUtils.intToBits(serializedId, 30);
         String totalBits = serializedIdBits + encryptedPayloadBits;
         chaCha20 = createChaChar20();
         byte[] cardIdBytes = chaCha20.encrypt(cardId, 512);
@@ -151,7 +118,7 @@ public class SecureActivationCodeGenerator {
             codeSb.append(alphabet[index]);
         }
 
-        return "" + alphabets[0][coderIndex] + codeSb.toString();
+        return "" + alphabets[0][coderIndex] + codeSb;
     }
 
     /**
@@ -162,7 +129,7 @@ public class SecureActivationCodeGenerator {
      * @return 是否正确
      */
     public boolean validate(String shopId, String code) {
-        if (null == shopId || null == code || code.length() != 16 || !isCharValid(code)) {
+        if (null == shopId || null == code || code.length() != 16 || !IdUtils.isCharValid(code, allowedChars)) {
             return false;
         }
 
@@ -182,7 +149,7 @@ public class SecureActivationCodeGenerator {
         StringBuilder bitsSb = new StringBuilder();
         for (char currentChar : code.substring(1).toCharArray()) {
             int index = getIndex(alphabet, currentChar);
-            bitsSb.append(toBits(index, 5));
+            bitsSb.append(IdUtils.intToBits(index, 5));
         }
         String bitsString = bitsSb.toString();
         int serializedId = Integer.parseInt(bitsString.substring(0, 30), 2);
@@ -190,17 +157,9 @@ public class SecureActivationCodeGenerator {
         ChaCha20 chaCha20 = createChaChar20();
         byte[] randomBytes = chaCha20.encrypt(serializedId, 512);
         byte[] randomHmacValue = Arrays.copyOfRange(randomBytes, 256, 512);
-        String randomHmacBitsString = toBits(randomHmacValue);
+        String randomHmacBitsString = IdUtils.byteArrayToBits(randomHmacValue);
         String originPayloadBitsString = bitsString.substring(30);
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < 45; i++) {
-            if (originPayloadBitsString.charAt(i) == randomHmacBitsString.charAt(i)) {
-                sb.append('0');
-            } else {
-                sb.append('1');
-            }
-        }
-        String originSubBitsString = sb.toString();
+        String originSubBitsString = xor(originPayloadBitsString, randomHmacBitsString);
         String shopIdBitsString = originSubBitsString.substring(0, 27);
         String hBitsString = originSubBitsString.substring(27);
         if (!shopIdBitsString.equals(getShopBits(shopId))) {
@@ -211,13 +170,10 @@ public class SecureActivationCodeGenerator {
         Hmac hmac = new Hmac(hmacKey);
         byte[] serializedIdBytes = toBytes(serializedId);
         byte[] shopIdBytes = toBytes(shopId);
-        byte[] originHmacValue = new byte[serializedIdBytes.length + shopIdBytes.length + randomHmacValue.length];
-        System.arraycopy(serializedIdBytes, 0, originHmacValue, 0, serializedIdBytes.length);
-        System.arraycopy(shopIdBytes, 0, originHmacValue, serializedIdBytes.length, shopIdBytes.length);
-        System.arraycopy(randomHmacValue, 0, originHmacValue, serializedIdBytes.length + shopIdBytes.length, randomHmacValue.length);
+        byte[] originHmacValue = combineOriginHmacValue(serializedIdBytes, shopIdBytes, randomHmacValue);
         byte[] encryptedHmacValue = hmac.encrypt(originHmacValue);
-        String otherHBitsString = toBits(encryptedHmacValue).substring(0, 18);
-        return otherHBitsString.equals(hBitsString);
+        String otherHmacBitsString = IdUtils.byteArrayToBits(encryptedHmacValue).substring(0, 18);
+        return otherHmacBitsString.equals(hBitsString);
     }
 
     /**
@@ -236,23 +192,6 @@ public class SecureActivationCodeGenerator {
         }
         int coderIndex = Math.abs(sum) % 32;
         return alphabets[0][coderIndex] == code.charAt(0);
-    }
-
-    /**
-     * 判断字符是否正确
-     *
-     * @param str 字符串
-     * @return 支付是否正确
-     */
-    private boolean isCharValid(String str) {
-        String template = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
-        for (char currentChar : str.toCharArray()) {
-            if (!template.contains("" + currentChar)) {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     /**
@@ -313,79 +252,13 @@ public class SecureActivationCodeGenerator {
             shopId = shopId.substring(1);
         }
 
-        Long longShopId = Long.valueOf(shopId);
-        if (longShopId > 134217727) {
-            longShopId = Long.valueOf(shopId.substring(shopId.length() - 8));
+        long longShopId = Long.parseLong(shopId);
+        if (longShopId > MAX_SHOP_ID) {
+            longShopId = Long.parseLong(shopId.substring(shopId.length() - 8));
         }
 
-        return toBits(longShopId, 27);
+        return IdUtils.longToBits(longShopId, 27);
     }
-
-    /**
-     * 将数字转换为二进制字符串
-     *
-     * @param value 值
-     * @param len   二进制字符串长度
-     * @return 二进制字符串
-     */
-    private String toBits(int value, int len) {
-        String binaryString = Integer.toBinaryString(value);
-        if (binaryString.length() > len) {
-            throw new IllegalArgumentException("Value is too large");
-        }
-
-        if (binaryString.length() < len) {
-            char[] appendChars = new char[len - binaryString.length()];
-            Arrays.fill(appendChars, '0');
-            return new String(appendChars) + binaryString;
-        }
-
-        return binaryString;
-    }
-
-    /**
-     * 将数字转换为二进制字符串
-     *
-     * @param value 值
-     * @param len   二进制字符串长度
-     * @return 二进制字符串
-     */
-    private String toBits(long value, int len) {
-        String binaryString = Long.toBinaryString(value);
-        if (binaryString.length() > len) {
-            throw new IllegalArgumentException("Value is too large");
-        }
-
-        if (binaryString.length() < len) {
-            char[] appendChars = new char[len - binaryString.length()];
-            Arrays.fill(appendChars, '0');
-            return new String(appendChars) + binaryString;
-        }
-
-        return binaryString;
-    }
-
-    /**
-     * 将byte数组转化为bit字符串
-     *
-     * @param value byte数组
-     * @return bit字符串
-     */
-    private String toBits(byte[] value) {
-        StringBuilder bits = new StringBuilder();
-        for (int i = value.length - 1; i >= 0; i--) {
-            byte byteValue = value[i];
-            String currentBitString = ""
-                    + (byte) ((byteValue >> 7) & 0x1) + (byte) ((byteValue >> 6) & 0x1)
-                    + (byte) ((byteValue >> 5) & 0x1) + (byte) ((byteValue >> 4) & 0x1)
-                    + (byte) ((byteValue >> 3) & 0x1) + (byte) ((byteValue >> 2) & 0x1)
-                    + (byte) ((byteValue >> 1) & 0x1) + (byte) ((byteValue) & 0x1);
-            bits.append(currentBitString);
-        }
-
-        return bits.toString();
-    }
-
 
     /**
      * 将整数转化为byte数组
@@ -408,12 +281,37 @@ public class SecureActivationCodeGenerator {
     }
 
     /**
-     * 将整数转化为byte数组
+     * 对两个bit串执行异或操作
      *
-     * @param value 整数
-     * @return byte数组
+     * @param bits1 bit串
+     * @param bits2 bit串
+     * @return 异或后的bit串
      */
-    private byte[] toBytes(long value) {
-        return ByteBuffer.allocate(8).putLong(value).array();
+    private String xor(String bits1, String bits2) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 45; i++) {
+            if (bits1.charAt(i) == bits2.charAt(i)) {
+                sb.append('0');
+            } else {
+                sb.append('1');
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 拼接原始hmac直接数组
+     *
+     * @param serializedIdBytes 序号
+     * @param shopIdBytes       店铺编号
+     * @param randomHmacValue   随机数
+     * @return 字节数组
+     */
+    private byte[] combineOriginHmacValue(byte[] serializedIdBytes, byte[] shopIdBytes, byte[] randomHmacValue) {
+        byte[] originHmacValue = new byte[serializedIdBytes.length + shopIdBytes.length + randomHmacValue.length];
+        System.arraycopy(serializedIdBytes, 0, originHmacValue, 0, serializedIdBytes.length);
+        System.arraycopy(shopIdBytes, 0, originHmacValue, serializedIdBytes.length, shopIdBytes.length);
+        System.arraycopy(randomHmacValue, 0, originHmacValue, serializedIdBytes.length + shopIdBytes.length, randomHmacValue.length);
+        return originHmacValue;
     }
 }

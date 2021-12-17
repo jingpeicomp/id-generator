@@ -3,11 +3,18 @@ package com.jinpei.id.generator;
 import org.junit.Assert;
 import org.junit.Test;
 
+/**
+ * 安全激活码单元测试
+ *
+ * @author liuzhaoming
+ * @date 2018/1/30
+ * @see SecureActivationCodeGenerator
+ */
 public class SecureActivationCodeGeneratorTest {
 
-    private ShopCardIdGenerator cardIdGenerator = new ShopCardIdGenerator();
+    private final ShopCardIdGenerator cardIdGenerator = new ShopCardIdGenerator();
 
-    private SecureActivationCodeGenerator codeGenerator = createCodeGenerator();
+    private final SecureActivationCodeGenerator codeGenerator = createCodeGenerator();
 
     @Test
     public void generate() {
@@ -43,7 +50,7 @@ public class SecureActivationCodeGeneratorTest {
     @Test
     public void validateCardId() {
         String shopId = "A1111";
-        Long cardId = cardIdGenerator.generate(shopId);
+        long cardId = cardIdGenerator.generate(shopId);
         String code = codeGenerator.generate(shopId, cardId, 889);
         Assert.assertFalse(codeGenerator.validateCardId(code, cardId + 1));
         Assert.assertFalse(codeGenerator.validateCardId(code, cardId - 1));

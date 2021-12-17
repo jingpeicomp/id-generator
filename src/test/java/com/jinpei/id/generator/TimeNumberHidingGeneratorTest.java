@@ -5,14 +5,20 @@ import org.junit.Test;
 
 import java.util.Random;
 
+/**
+ * 带时间戳校验的加密数字单元测试
+ *
+ * @author liuzhaoming
+ * @date 2018/9/12
+ * @see TimeNumberHidingGenerator
+ */
 public class TimeNumberHidingGeneratorTest {
 
-
-    private TimeNumberHidingGenerator generator = createGenerator();
+    private final TimeNumberHidingGenerator generator = createGenerator();
 
     @Test
     public void generate() {
-        Long originNumber = 99999999999L;
+        long originNumber = 99999999999L;
         String hidingStr = generator.generate(originNumber);
         Assert.assertEquals(20, hidingStr.length());
         Assert.assertTrue(isCharValid(hidingStr));
@@ -77,7 +83,7 @@ public class TimeNumberHidingGeneratorTest {
         Long originNumber = 14825847997L;
         String lastStr = null, str = null;
         int i = 0;
-        while (i++ < 4) {
+        while (i++ < 10) {
             if (null != str) {
                 Assert.assertEquals(originNumber, generator.parse(str));
             }
@@ -92,9 +98,9 @@ public class TimeNumberHidingGeneratorTest {
     }
 
     private TimeNumberHidingGenerator createGenerator() {
-        String alphabetsStr = "0389215647,1285706349,3724685109,3904682157,7314926805,3648592710,1037856249,6153974028,2978054361,7129680435";
-        return new TimeNumberHidingGenerator("uuhhgfj11p23710837e]q2ytrqrqweqe",
-                "!@#$&123f*&^", 10, alphabetsStr);
+        String alphabetsStr = "0381592647,1270856349,4685109372,3904682157,7316492805,3645927810,1803756249,6153940728,2905437861,7968012435";
+        return new TimeNumberHidingGenerator("abcdefj11p23710837e]q222rqrqweqe",
+                "!@#$7￥yt", 10, alphabetsStr);
     }
 
     /**

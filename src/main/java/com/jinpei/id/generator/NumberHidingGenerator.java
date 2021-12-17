@@ -1,15 +1,31 @@
 package com.jinpei.id.generator;
 
+import com.jinpei.id.common.utils.IdUtils;
 import com.jinpei.id.common.algorithm.ChaCha20;
 import com.jinpei.id.common.algorithm.Hmac;
 import lombok.extern.slf4j.Slf4j;
 
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Random;
 
 /**
- * 将最长不超过11位的整数对称加密为18位数字字符串，可能会大于Long类型的最大值
- * Created by liuzhaoming on 2018/8/23.
+ * 将最长不超过11位的整数加密为18位数字字符串，可能会大于Long类型的最大值，支持解密
+ * 很多场景下为了信息隐蔽需要对数字进行加密，比如用户的手机号码；并且需要支持解密。
+ * 本算法支持对不大于12位的正整数（即1000,000,000,000）进行加密，输出固定长度为18位的数字字符串；支持解密。
+ * 说明:
+ * 1.加密字符串固定18位数字，原始待加密正整数不大于12位
+ * 2.加密字符串本质上是一个56bit的正整数，通过一定的编码规则转换而来。
+ * 3.为了安全，使用者在创建生成器的时候，需要提供10套随机编码规则，以数字1来说，可能在“5032478619”编码规则中代表数字8，在"2704168539"编码规则中代表数字4。即每个字符都可以代表0-9的任一数字。
+ * 4.具体使用何种编码规则，是通过原始正整数进行ChaCha20加密后的随机数hash决定的。
+ * 5.为了方便开发者使用，提供了随机生成编码的静态方法。
+ * 加密后的数字字符串由编码规则+密文报文体组成，密文由56bit组成，可转化为17位数，编码规则为一位数字:
+ * +====================================================
+ * | 1位编码规则 | 37bit原始数字 |  19bit原始数字生成的密文  |
+ * +====================================================
+ *
+ * @author liuzhaoming
+ * @date 2018/8/23
  */
 @Slf4j
 public class NumberHidingGenerator {
@@ -18,16 +34,21 @@ public class NumberHidingGenerator {
      */
     private static final Random RANDOM = new Random();
 
-    private String chacha20Key;
+    private final String chacha20Key;
 
-    private String chacha20Nonce;
+    private final String chacha20Nonce;
 
-    private int chacha20Counter;
+    private final int chacha20Counter;
 
     /**
      * 编码
      */
     protected char[][] alphabets;
+
+    /**
+     * 待加密的最大数
+     */
+    private static final long MAX_NUMBER = 100000000000L;
 
     /**
      * 构造函数
@@ -52,27 +73,19 @@ public class NumberHidingGenerator {
      * @return 18位加密数值字符串
      */
     public String generate(Long originNumber) {
-        if (originNumber < 0 || originNumber >= 100000000000L) {
+        if (originNumber < 0 || originNumber >= MAX_NUMBER) {
             throw new IllegalArgumentException("The number should be between [0, 100000000000)");
         }
 
         ChaCha20 chaCha20 = createChaChar20();
         byte[] randomBytes = chaCha20.encrypt(originNumber, 512);
         String encryptedHmacBits = encryptHmacBits(originNumber, randomBytes);
-        String originNumberBits = toBits(originNumber, 37);
+        String originNumberBits = IdUtils.longToBits(originNumber, 37);
         String totalBits = originNumberBits + encryptedHmacBits;
         Long generateNumber = Long.valueOf(totalBits, 2);
-        String generateNumberString = long2String(generateNumber, 17);
+        String generateNumberString = IdUtils.longToFixedString(generateNumber, 17);
 
-        int coderIndex = getCoderIndex(randomBytes);
-        char[] alphabet = alphabets[coderIndex];
-        StringBuilder codeSb = new StringBuilder();
-        for (char charValue : generateNumberString.toCharArray()) {
-            int index = Integer.parseInt(String.valueOf(charValue));
-            codeSb.append(alphabet[index]);
-        }
-
-        return "" + alphabets[0][coderIndex] + codeSb.toString();
+        return encode(randomBytes, generateNumberString);
     }
 
     /**
@@ -82,22 +95,15 @@ public class NumberHidingGenerator {
      * @return 返回正整数，不合法的话返回null
      */
     public Long parse(String hidingNumberStr) {
-        if (null == hidingNumberStr || hidingNumberStr.length() != 18 || !isCharValid(hidingNumberStr)) {
+        if (null == hidingNumberStr || hidingNumberStr.length() != 18 || !IdUtils.isNumeric(hidingNumberStr)) {
             return null;
         }
 
-        int coderIndex = parseCoderIndex(hidingNumberStr);
-        if (coderIndex < 0) {
+        StringBuilder numberSb = decode(hidingNumberStr);
+        if (null == numberSb) {
             return null;
         }
-
-        char[] alphabet = alphabets[coderIndex];
-        StringBuilder numberSb = new StringBuilder();
-        for (char currentChar : hidingNumberStr.substring(1).toCharArray()) {
-            int index = getIndex(alphabet, currentChar);
-            numberSb.append(index);
-        }
-        String bitsString = toBits(Long.valueOf(numberSb.toString()), 56);
+        String bitsString = IdUtils.longToBits(Long.parseLong(numberSb.toString()), 56);
         Long originNumber = Long.valueOf(bitsString.substring(0, 37), 2);
         String originHmacBits = bitsString.substring(37);
         ChaCha20 chaCha20 = createChaChar20();
@@ -117,29 +123,7 @@ public class NumberHidingGenerator {
      * @return 10组字符编码
      */
     public static String generateAlphabets() {
-        String template = "0123456789";
-        List<Character> templateCharList = new ArrayList<>();
-        for (char currentChar : template.toCharArray()) {
-            templateCharList.add(currentChar);
-        }
-
-        String[] alphabets = new String[10];
-        for (int i = 0; i < 10; i++) {
-            Collections.shuffle(templateCharList);
-            StringBuilder sb = new StringBuilder();
-            for (Character currentChar : templateCharList) {
-                sb.append(currentChar);
-            }
-            alphabets[i] = sb.toString();
-        }
-
-        StringBuilder sb = new StringBuilder();
-        for (String alphabet : alphabets) {
-            sb.append(alphabet);
-            sb.append(",");
-        }
-
-        return sb.substring(0, sb.length() - 1);
+        return IdUtils.generateAlphabets("0123456789", 10);
     }
 
     /**
@@ -152,13 +136,29 @@ public class NumberHidingGenerator {
     private String encryptHmacBits(Long originNumber, byte[] randomBytes) {
         byte[] hmacKey = Arrays.copyOfRange(randomBytes, 0, 256);
         byte[] randomHmacValue = Arrays.copyOfRange(randomBytes, 256, 512);
-        byte[] originNumberBytes = toBytes(originNumber);
-        byte[] originHmacValue = new byte[randomHmacValue.length + originNumberBytes.length];
-        System.arraycopy(randomHmacValue, 0, originHmacValue, 0, randomHmacValue.length);
-        System.arraycopy(originNumberBytes, 0, originHmacValue, randomHmacValue.length, originNumberBytes.length);
+        byte[] originHmacValue = combineHmacInput(randomHmacValue, originNumber);
         Hmac hmac = new Hmac(hmacKey);
         byte[] encryptedHmacValue = hmac.encrypt(originHmacValue);
-        return toBits(encryptedHmacValue).substring(0, 19);
+        return IdUtils.byteArrayToBits(encryptedHmacValue).substring(0, 19);
+    }
+
+    /**
+     * 将字符串进行重新编码混淆
+     *
+     * @param randomBytes          随机数据，决定使用何种编码方式
+     * @param generateNumberString 原始数字字符串
+     * @return 重新编码后的信息
+     */
+    protected String encode(byte[] randomBytes, String generateNumberString) {
+        int coderIndex = getCoderIndex(randomBytes);
+        char[] alphabet = alphabets[coderIndex];
+        StringBuilder codeSb = new StringBuilder();
+        for (char charValue : generateNumberString.toCharArray()) {
+            int index = Integer.parseInt(String.valueOf(charValue));
+            codeSb.append(alphabet[index]);
+        }
+
+        return "" + alphabets[0][coderIndex] + codeSb;
     }
 
     /**
@@ -178,6 +178,28 @@ public class NumberHidingGenerator {
         }
         return coderIndex;
     }
+
+    /**
+     * 将字符串从编码字典中还原
+     *
+     * @param hidingNumberStr 信息隐藏字符串
+     * @return 还原后的数字
+     */
+    protected StringBuilder decode(String hidingNumberStr) {
+        int coderIndex = parseCoderIndex(hidingNumberStr);
+        if (coderIndex < 0) {
+            return null;
+        }
+
+        char[] alphabet = alphabets[coderIndex];
+        StringBuilder numberSb = new StringBuilder();
+        for (char currentChar : hidingNumberStr.substring(1).toCharArray()) {
+            int index = getIndex(alphabet, currentChar);
+            numberSb.append(index);
+        }
+        return numberSb;
+    }
+
 
     /**
      * 获取编码方式
@@ -225,28 +247,19 @@ public class NumberHidingGenerator {
     }
 
     /**
-     * 将整数转换为指定位数字符串，不满指定位前面添0
+     * 拼接HMAC待加密数据
      *
-     * @param number 不大于指定位的正整数
-     * @param length 指定位数
-     * @return 数字字符串
+     * @param randomHmacValue 随机值
+     * @param number          原始数据
+     * @return 待加密的的数据
      */
-    private String long2String(Long number, int length) {
-        String str = String.valueOf(number);
-        if (str.length() > length) {
-            throw new IllegalArgumentException("Number length large than " + length + ", number is " + number);
-        } else if (str.length() < length) {
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0, size = length - str.length(); i < size; i++) {
-                sb.append('0');
-            }
-            sb.append(str);
-            return sb.toString();
-        } else {
-            return str;
-        }
+    protected byte[] combineHmacInput(byte[] randomHmacValue, long number) {
+        byte[] originNumberBytes = toBytes(number);
+        byte[] originHmacValue = new byte[randomHmacValue.length + originNumberBytes.length];
+        System.arraycopy(randomHmacValue, 0, originHmacValue, 0, randomHmacValue.length);
+        System.arraycopy(originNumberBytes, 0, originHmacValue, randomHmacValue.length, originNumberBytes.length);
+        return originHmacValue;
     }
-
 
     /**
      * 将整数转化为byte数组
@@ -256,66 +269,6 @@ public class NumberHidingGenerator {
      */
     protected byte[] toBytes(long value) {
         return ByteBuffer.allocate(8).putLong(value).array();
-    }
-
-    /**
-     * 将byte数组转化为bit字符串
-     *
-     * @param value byte数组
-     * @return bit字符串
-     */
-    protected String toBits(byte[] value) {
-        StringBuilder bits = new StringBuilder();
-        for (int i = value.length - 1; i >= 0; i--) {
-            byte byteValue = value[i];
-            String currentBitString = ""
-                    + (byte) ((byteValue >> 7) & 0x1) + (byte) ((byteValue >> 6) & 0x1)
-                    + (byte) ((byteValue >> 5) & 0x1) + (byte) ((byteValue >> 4) & 0x1)
-                    + (byte) ((byteValue >> 3) & 0x1) + (byte) ((byteValue >> 2) & 0x1)
-                    + (byte) ((byteValue >> 1) & 0x1) + (byte) ((byteValue) & 0x1);
-            bits.append(currentBitString);
-        }
-
-        return bits.toString();
-    }
-
-    /**
-     * 将数字转换为二进制字符串
-     *
-     * @param value 值
-     * @param len   二进制字符串长度
-     * @return 二进制字符串
-     */
-    protected String toBits(long value, int len) {
-        String binaryString = Long.toBinaryString(value);
-        if (binaryString.length() > len) {
-            throw new IllegalArgumentException("Value is too large");
-        }
-
-        if (binaryString.length() < len) {
-            char[] appendChars = new char[len - binaryString.length()];
-            Arrays.fill(appendChars, '0');
-            return new String(appendChars) + binaryString;
-        }
-
-        return binaryString;
-    }
-
-    /**
-     * 判断字符是否正确
-     *
-     * @param str 字符串
-     * @return 字符是否正确
-     */
-    protected boolean isCharValid(String str) {
-        String template = "0123456789";
-        for (char currentChar : str.toCharArray()) {
-            if (!template.contains("" + currentChar)) {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     /**

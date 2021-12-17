@@ -5,11 +5,13 @@ import javax.crypto.spec.SecretKeySpec;
 
 /**
  * HMac SHA256加密
- * Created by liuzhaoming on 2018/2/1.
+ *
+ * @author liuzhaoming
+ * @date 2018/2/1
  */
 public class Hmac {
 
-    private Mac sha256Mac;
+    private final Mac sha256Mac;
 
     public Hmac(byte[] key) {
         if (null == key || key.length == 0) {
@@ -18,8 +20,8 @@ public class Hmac {
 
         try {
             sha256Mac = Mac.getInstance("HmacSHA256");
-            SecretKeySpec secret_key = new SecretKeySpec(key, "HmacSHA256");
-            sha256Mac.init(secret_key);
+            SecretKeySpec secretKey = new SecretKeySpec(key, "HmacSHA256");
+            sha256Mac.init(secretKey);
         } catch (Exception e) {
             throw new IllegalArgumentException(e);
         }

@@ -5,14 +5,23 @@ import org.junit.Test;
 
 import java.util.Random;
 
+/**
+ * 加密信息单元测试
+ *
+ * @author liuzhaoming
+ * @date 2018/8/24
+ * @see NumberHidingGenerator
+ */
 public class NumberHidingGeneratorTest {
 
-    private String alphabetsStr = NumberHidingGenerator.generateAlphabets();
+    private final String alphabetsStr = NumberHidingGenerator.generateAlphabets();
+
+    private final NumberHidingGenerator generator = new NumberHidingGenerator("abcdefj11p23710837e]q222rqrqweqe",
+            "!@#$&123frwq", 10, alphabetsStr);
 
     @Test
     public void generate() {
-        NumberHidingGenerator generator = createGenerator();
-        Long originNumber = 99999999999L;
+        long originNumber = 99999999999L;
         String hidingStr = generator.generate(originNumber);
         Assert.assertEquals(18, hidingStr.length());
         Assert.assertTrue(isCharValid(hidingStr));
@@ -25,7 +34,6 @@ public class NumberHidingGeneratorTest {
 
     @Test
     public void parse() {
-        NumberHidingGenerator generator = createGenerator();
         Long originNumber = 14825847997L;
         String hidingStr = generator.generate(originNumber);
         Assert.assertEquals(originNumber, generator.parse(hidingStr));
@@ -38,7 +46,6 @@ public class NumberHidingGeneratorTest {
     @Test
     public void batchGenerate() {
         int batchSize = 10000;
-        NumberHidingGenerator generator = createGenerator();
         Long[] originNumbers = generateOriginNumbers(batchSize);
         for (int i = 0; i < batchSize; i++) {
             String hidingString = generator.generate(originNumbers[i]);
@@ -51,7 +58,6 @@ public class NumberHidingGeneratorTest {
     @Test
     public void performance() {
         int batchSize = 100000;
-        NumberHidingGenerator generator = createGenerator();
         Long[] originNumbers = generateOriginNumbers(batchSize);
         String[] hidingNumberStrs = new String[batchSize];
         long startTime = System.currentTimeMillis();
@@ -73,11 +79,6 @@ public class NumberHidingGeneratorTest {
             }
             Assert.assertEquals(originNumbers[i], parseNumbers[i]);
         }
-    }
-
-    private NumberHidingGenerator createGenerator() {
-        return new NumberHidingGenerator("uyssffj11p23710837e]q222rqrqweqe",
-                "!@#$&**3frwq", 10, alphabetsStr);
     }
 
     /**

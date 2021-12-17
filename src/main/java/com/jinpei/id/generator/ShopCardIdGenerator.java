@@ -1,17 +1,26 @@
 package com.jinpei.id.generator;
 
+import com.jinpei.id.common.utils.IdUtils;
+import com.jinpei.id.generator.base.CardIdGeneratorable;
 import lombok.extern.slf4j.Slf4j;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.TimeZone;
-
 /**
- * 加入店铺编号的卡号生成器
- * Created by liuzhaoming on 2017/11/23.
+ * 加入店铺编号的卡号生成器，卡号固定为16位，为53bit。格式如下：
+ * +======================================================================
+ * | 4bit店铺编号校验位 | 30bit时间戳 | 3bit机器编号  | 9bit序号 | 7bit卡号校验位 |
+ * +======================================================================
+ * 1. 30 bit的秒时间戳支持34年
+ * 2. 9 bit序号支持512个序号
+ * 3. 3 bit机器编号支持8台负载
+ * 即卡号生成最大支持8台负载，每台负载每秒钟可以生成512个卡号。
+ * 时间戳、机器编号、序号和校验位的bit位数支持业务自定义，方便业务定制自己的生成器。
+ *
+ * @author liuzhaoming
+ * @date 2017/11/23
  */
 @Slf4j
-public class ShopCardIdGenerator {
+@SuppressWarnings({"UnusedAssignment", "BooleanMethodIsAlwaysInverted"})
+public class ShopCardIdGenerator implements CardIdGeneratorable {
     /**
      * 时间bit数，时间的单位为秒，30 bit位时间可以表示34年
      */
@@ -83,14 +92,24 @@ public class ShopCardIdGenerator {
     private long maxShopCode = 0L;
 
     /**
-     * 开始时间，默认为2018-01-01
-     */
-    private String startTimeString = "2018-01-01 00:00:00";
-
-    /**
      * 起始时间戳
      */
     private long startTimeStamp = 0L;
+
+    /**
+     * 开始时间格式，默认"2019-01-01 00:00:00"
+     */
+    private String startTimeString = "2019-01-01 00:00:00";
+
+    /**
+     * 最大ID
+     */
+    private static final long MAX_ID = 9999999999999999L;
+
+    /**
+     * 最小ID
+     */
+    private static final long MIN_ID = 1000000000000000L;
 
     public ShopCardIdGenerator() {
         this(1);
@@ -99,8 +118,7 @@ public class ShopCardIdGenerator {
     public ShopCardIdGenerator(int machineId) {
         int maxMachineId = ~(-1 << machineBits);
         if (machineId > maxMachineId) {
-            throw new IllegalArgumentException("Machine bits is " + machineBits
-                    + ", so the max machine id is " + maxMachineId);
+            throw new IllegalArgumentException("Machine bits is " + machineBits + ", so the max machine id is " + maxMachineId);
         }
 
         this.machineId = machineId;
@@ -115,7 +133,7 @@ public class ShopCardIdGenerator {
      * @param sequenceBits    每秒序列bit数
      * @param validationBits  校验bit位数
      * @param machineId       机器编号
-     * @param startTimeString 开始时间，默认为2016-01-01
+     * @param startTimeString 开始时间
      */
     public ShopCardIdGenerator(int timeBits, int machineBits, int sequenceBits, int validationBits, int machineId,
                                String startTimeString) {
@@ -123,14 +141,12 @@ public class ShopCardIdGenerator {
             throw new IllegalArgumentException("The bits should be larger than 0");
         }
         if (timeBits + machineBits + sequenceBits + validationBits != 49) {
-            throw new IllegalArgumentException("The sum of timeBits and machineBits and sequenceBits " +
-                    "and validationBits should be 49");
+            throw new IllegalArgumentException("The sum of timeBits and machineBits and sequenceBits and validationBits should be 49");
         }
 
         int maxMachineId = ~(-1 << machineBits);
         if (machineId > maxMachineId) {
-            throw new IllegalArgumentException("Machine bits is " + machineBits
-                    + ", so the max machine id is " + maxMachineId);
+            throw new IllegalArgumentException("Machine bits is " + machineBits + ", so the max machine id is " + maxMachineId);
         }
 
         this.timeBits = timeBits;
@@ -138,7 +154,9 @@ public class ShopCardIdGenerator {
         this.sequenceBits = sequenceBits;
         this.validationBits = validationBits;
         this.machineId = machineId;
-        this.startTimeString = null == startTimeString ? "2018-01-01 00:00:00" : startTimeString;
+        if (null != startTimeString) {
+            this.startTimeString = startTimeString;
+        }
         init();
     }
 
@@ -153,7 +171,7 @@ public class ShopCardIdGenerator {
             throw new IllegalArgumentException("Shop id cannot be null");
         }
 
-        long curStamp = getNewStamp();
+        long curStamp = getCurrentSecond();
         if (curStamp < lastStamp) {
             throw new IllegalArgumentException("Clock moved backwards. Refusing to generate id");
         }
@@ -161,20 +179,14 @@ public class ShopCardIdGenerator {
         if (curStamp == lastStamp) {
             sequence = (sequence + 1) & maxSequence;
             if (sequence == 0L) {
-                curStamp = getNextStamp();
+                curStamp = getNextSecond();
             }
         } else {
             sequence = 0L;
         }
         lastStamp = curStamp;
-        long shopCode = getShopCode(shopId);
-        long originId = shopCode << shopOffset
-                | (curStamp - startTimeStamp) << timeOffset
-                | machineId << machineOffset
-                | sequence << sequenceOffset;
 
-        int validationCode = getValidationCode(originId);
-        return originId + validationCode;
+        return combine(shopId, curStamp - startTimeStamp);
     }
 
     /**
@@ -192,7 +204,7 @@ public class ShopCardIdGenerator {
         String bitString = Long.toBinaryString(id);
         int bitLength = bitString.length();
 
-        long shopCode = getShopCode(shopId);
+        long shopCode = IdUtils.getShopCode(shopId, maxShopCode);
         String shopCodeBitString = bitString.substring(0, bitLength - shopOffset);
         long parseShopCode = Long.parseLong(shopCodeBitString, 2);
         return shopCode == parseShopCode;
@@ -211,13 +223,10 @@ public class ShopCardIdGenerator {
 
         String bitString = Long.toBinaryString(id);
         int bitLength = bitString.length();
-        Long timestamp = Long.parseLong(bitString.substring(bitLength - timeOffset - timeBits, bitLength - timeOffset),
-                2);
-        Long machineId = Long.parseLong(bitString.substring(bitLength - machineOffset - machineBits,
-                bitLength - machineOffset), 2);
-        Long sequence = Long.parseLong(bitString.substring(bitLength - sequenceOffset - sequenceBits,
-                bitLength - sequenceOffset), 2);
-        return new Long[]{timestamp, machineId, sequence};
+        long timestamp = Long.parseLong(bitString.substring(bitLength - timeOffset - timeBits, bitLength - timeOffset), 2);
+        long machineId = Long.parseLong(bitString.substring(bitLength - machineOffset - machineBits, bitLength - machineOffset), 2);
+        long sequence = Long.parseLong(bitString.substring(bitLength - sequenceOffset - sequenceBits, bitLength - sequenceOffset), 2);
+        return new Long[]{(timestamp + startTimeStamp) * 1000, machineId, sequence};
     }
 
     /**
@@ -225,18 +234,16 @@ public class ShopCardIdGenerator {
      *
      * @param shopId    店铺ID
      * @param timestamp 时间戳
-     * @param machineId 机器编号
-     * @param sequence  序号
      * @return 卡号ID
      */
-    protected long combine(String shopId, Long timestamp, Long machineId, Long sequence) {
-        long shopCode = getShopCode(shopId);
+    protected long combine(String shopId, Long timestamp) {
+        long shopCode = IdUtils.getShopCode(shopId, maxShopCode);
         long originId = shopCode << shopOffset
                 | timestamp << timeOffset
                 | machineId << machineOffset
                 | sequence << sequenceOffset;
 
-        int validationCode = getValidationCode(originId);
+        int validationCode = IdUtils.getValidationCode(originId, maxCode);
         return originId + validationCode;
     }
 
@@ -250,7 +257,7 @@ public class ShopCardIdGenerator {
         shopOffset = timeOffset + timeBits;
         maxSequence = ~(-1L << sequenceBits);
         maxCode = ~(-1 << validationBits);
-        startTimeStamp = getTimeStamp(startTimeString);
+        startTimeStamp = IdUtils.getTimeStampSecond(startTimeString);
         maxShopCode = 14L;
     }
 
@@ -261,44 +268,11 @@ public class ShopCardIdGenerator {
      * @return boolean 合法返回true
      */
     private boolean validateCode(long id) {
-        if (id > 9999999999999999L || id < 1000000000000000L) {
+        if (id > MAX_ID || id < MIN_ID) {
             return false;
         }
 
-        String bitString = Long.toBinaryString(id);
-        int bitLength = bitString.length();
-
-        String codeBitString = bitString.substring(bitLength - validationBits);
-        int validationCode = Integer.parseInt(codeBitString, 2);
-        long originId = id - validationCode;
-        long parseValidationCode = getValidationCode(originId);
-        if (validationCode != parseValidationCode) {
-            return false;
-        }
-
-        Long timestamp = Long.parseLong(bitString.substring(bitLength - timeBits - timeOffset, bitLength - timeOffset), 2);
-        long currentStamp = System.currentTimeMillis() / 1000 - startTimeStamp;
-        long timeDelta = currentStamp - timestamp;
-        return timeDelta > -3600;
-    }
-
-    /**
-     * 获取起始时间戳，因为要兼容java7，使用Date对象
-     *
-     * @param dateStr 时间字符串，格式由startTimeFormatter指定
-     * @return 时间戳
-     */
-    private long getTimeStamp(String dateStr) {
-        try {
-            SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-            formatter.setTimeZone(TimeZone.getTimeZone("GMT+0800"));
-            Date startDate = formatter.parse(dateStr);
-            return startDate.getTime() / 1000;
-        } catch (Exception e) {
-            log.error("Cannot get time stamp string {}, the invalid date format is yyyy-MM-dd HH:mm:ss ,please check!",
-                    dateStr);
-            return 1509292800L;
-        }
+        return validateCode(id, startTimeStamp, timeBits, timeOffset, validationBits, maxCode);
     }
 
     /**
@@ -306,7 +280,7 @@ public class ShopCardIdGenerator {
      *
      * @return 时间戳（秒）
      */
-    private long getNewStamp() {
+    private long getCurrentSecond() {
         return System.currentTimeMillis() / 1000;
     }
 
@@ -315,63 +289,13 @@ public class ShopCardIdGenerator {
      *
      * @return 时间戳（秒）
      */
-    private long getNextStamp() {
-        long second = getNewStamp();
+    private long getNextSecond() {
+        long second = getCurrentSecond();
         while (second <= lastStamp) {
-            second = getNewStamp();
+            IdUtils.sleep(20);
+            second = getCurrentSecond();
         }
+
         return second;
-    }
-
-    /**
-     * 获取校验码
-     *
-     * @param originId 原始卡号
-     * @return 校验码
-     */
-    private int getValidationCode(long originId) {
-        String strOriginId = String.valueOf(originId);
-        int[] numbers = new int[strOriginId.length()];
-        for (int i = 0; i < strOriginId.length(); i++) {
-            numbers[i] = Character.getNumericValue(strOriginId.charAt(i));
-        }
-        for (int i = numbers.length - 2; i >= 0; i -= 2) {
-            numbers[i] <<= 1;
-            numbers[i] = numbers[i] / 10 + numbers[i] % 10;
-        }
-
-        int validationCode = 0;
-        for (int number : numbers) {
-            validationCode += number;
-        }
-        validationCode *= 7;
-        return validationCode % maxCode;
-    }
-
-    /**
-     * 获取店铺编码
-     *
-     * @param shopId 店铺ID
-     * @return 店铺编码
-     */
-    private Long getShopCode(String shopId) {
-        long numberShopId = Long.parseLong(shopId, 16);
-        String strNumberShopId = String.valueOf(numberShopId);
-        int[] numbers = new int[strNumberShopId.length()];
-        for (int i = 0; i < strNumberShopId.length(); i++) {
-            numbers[i] = Character.getNumericValue(strNumberShopId.charAt(i));
-        }
-        for (int i = numbers.length - 1; i >= 0; i -= 2) {
-            numbers[i] <<= 1;
-            numbers[i] = numbers[i] / 10 + numbers[i] % 10;
-        }
-
-        int validationCode = 0;
-        for (int number : numbers) {
-            validationCode += number;
-        }
-        validationCode *= validationCode;
-        validationCode %= maxShopCode;
-        return validationCode < 2L ? validationCode + 2L : validationCode;
     }
 }

@@ -1,63 +1,88 @@
 package com.jinpei.id.generator;
 
+import com.jinpei.id.common.utils.IdUtils;
 import lombok.extern.slf4j.Slf4j;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.TimeZone;
+import java.util.Random;
 
 /**
- * Long类型ID生成器，固定为19位长度
- * 生成ID，采用snowflake算法，64bit整数，1秒可以生成800万个ID
- * 0-41bit毫秒时间戳-10bit机器ID-12bit序列化
- * 42bit的毫秒时间戳，2000年算起可以支持该算法使用到2068年，10bit的工作机器id可以支持1024台机器，12序列号支持1毫秒产生4096个自增序列id
- * Created by liuzhaoming on 2017/11/23.
+ * Long类型ID生成器。
+ * ID固定为19位，64bit。 可用于各种业务系统的ID生成.
+ * +=======================================================================
+ * | 42bit 毫秒时间戳 | 10bit机器编号  | 12bit序号  |
+ * +=======================================================================
+ * <p>
+ * 42 bit的毫秒时间戳支持68年
+ * 12 bit序号支持4096个序号
+ * 10 bit机器编号支持1024台负载
+ * <p>
+ * 即ID生成最大支持1024台负载，每台负载每毫秒可以生成4096个ID，这样每台负载每秒可以产生40万ID。
+ *
+ * @author liuzhaoming
+ * @date 2017/11/23
  */
 @Slf4j
+@SuppressWarnings("FieldCanBeLocal")
 public class LongIdGenerator {
-    private String startTimeString = "2010-01-01 00:00:00";
-
 
     /**
-     * 起始的时间戳, 2016-01-01 00:00:00
+     * 起始的时间戳, 2014-01-01 00:00:00，为了统一为19位，起始时间戳不能太近，否则ID就会为18位
      */
-    private long startStamp = getTimeStamp(startTimeString);
+    private final long startStamp = IdUtils.getTimeStampMill("2014-01-01 00:00:00");
 
     /**
-     * 每一部分占用的位数
+     * 序列号占用的位数
      */
-    private long sequenceBit = 12; //序列号占用的位数
-    private long machineBit = 10;   //机器标识占用的位数
+    private final long sequenceBit = 12;
+    /**
+     * 机器标识占用的位数
+     */
+    private final long machineBit = 10;
 
     /**
      * 每一部分的最大值
      */
-    private long maxSequence = ~(-1L << sequenceBit);
+    private final long maxSequence = ~(-1L << sequenceBit);
 
     /**
      * 每一部分向左的位移
      */
-    private long machineLeft = sequenceBit;
-    private long timestampLeft = sequenceBit + machineBit;
+    private final long machineLeft = sequenceBit;
+    private final long timestampLeft = sequenceBit + machineBit;
 
-    private long machineId;     //机器标识,采用IP地址的后两段,16bit的工作机器id可以支持65536台机器
-    private long sequence = 0L; //序列号,13序列号支持1毫秒产生8192个自增序列id
-    private long lastStamp = -1L;//上一次时间戳
+    /**
+     * 机器标识
+     */
+    private final long machineId;
+
+    /**
+     * 序列号,12 bit序列号支持1毫秒产生4096个自增序列id
+     */
+    private long sequence = 0L;
+
+    /**
+     * 上一次时间戳
+     */
+    private long lastStamp = -1L;
+
+    private final Random random = new Random();
+
+    /**
+     * 最小ID 19位
+     */
+    private static final long MIN_ID = 1000000000000000000L;
 
     public LongIdGenerator(Long machineId) {
         this.machineId = machineId;
     }
 
-
     /**
-     * 生成ID，采用snowflake算法，64bit整数，1秒可以生成800万个ID
-     * 0-41bit毫秒时间戳-10bit机器ID-12bit序列化
-     * 42bit的毫秒时间戳，2000年算起可以支持该算法使用到2068年，10bit的工作机器id可以支持1024台机器，12序列号支持1毫秒产生4096个自增序列id
+     * 生成ID
      *
      * @return 返回Long ID
      */
     public synchronized Long generate() {
-        long curStamp = getCurrentStamp();
+        long curStamp = getCurrentMill();
         if (curStamp < lastStamp) {
             throw new IllegalArgumentException("Clock moved backwards. Refusing to generate id");
         }
@@ -70,14 +95,31 @@ public class LongIdGenerator {
                 curStamp = getNextMill();
             }
         } else {
-            //不同毫秒内，序列号置为0
-            sequence = 0L;
+            //不同毫秒内，序列号置为16以内的随机数，方便根据尾号hash
+            sequence = random.nextInt(16);
         }
 
         lastStamp = curStamp;
-        return (curStamp - startStamp) << timestampLeft //时间戳部分
-                | machineId << machineLeft             //机器标识部分
-                | sequence;                             //序列号部分
+        return (curStamp - startStamp) << timestampLeft | machineId << machineLeft | sequence;
+    }
+
+    /**
+     * 解析id
+     *
+     * @param id long类型ID
+     * @return 解析结果依次是时间戳、机器编码、序列号
+     */
+    public Long[] parse(long id) {
+        if (id < MIN_ID) {
+            return null;
+        }
+
+        long timestamp = id >> timestampLeft;
+        String bitString = Long.toBinaryString(id >> machineLeft);
+        long machineId = Long.parseLong(bitString.substring(bitString.length() - 10), 2);
+        bitString = Long.toBinaryString(id);
+        long sequence = Long.parseLong(bitString.substring(53), 2);
+        return new Long[]{startStamp + timestamp, machineId, sequence};
     }
 
     /**
@@ -86,9 +128,9 @@ public class LongIdGenerator {
      * @return 下一毫秒
      */
     private long getNextMill() {
-        long mill = getCurrentStamp();
+        long mill = getCurrentMill();
         while (mill <= lastStamp) {
-            mill = getCurrentStamp();
+            mill = getCurrentMill();
         }
         return mill;
     }
@@ -98,26 +140,7 @@ public class LongIdGenerator {
      *
      * @return 时间戳
      */
-    private long getCurrentStamp() {
+    private long getCurrentMill() {
         return System.currentTimeMillis();
-    }
-
-    /**
-     * 获取起始时间戳，因为要兼容java7，使用Date对象
-     *
-     * @param dateStr 时间字符串，格式由startTimeFormatter指定
-     * @return 时间戳
-     */
-    private long getTimeStamp(String dateStr) {
-        try {
-            SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-            formatter.setTimeZone(TimeZone.getTimeZone("GMT+0800"));
-            Date startDate = formatter.parse(dateStr);
-            return startDate.getTime();
-        } catch (Exception e) {
-            log.error("Cannot get time stamp string {}, the invalid date format is yyyy-MM-dd HH:mm:ss ,please check!",
-                    dateStr);
-            return 1262275200000L;
-        }
     }
 }
