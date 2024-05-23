@@ -65,6 +65,18 @@ public class IdUtils {
         return fillBinaryString(binaryString, len);
     }
 
+
+    /**
+     * 将bit int类型数字转换为二进制字符串
+     *
+     * @param value 值
+     * @param len   二进制字符串长度
+     * @return 二进制字符串
+     */
+    public static String bigIntToBits(BigInteger value, int len) {
+        String binaryString = value.toString(2);
+        return fillBinaryString(binaryString, len);
+    }
     /**
      * 获取店铺编码
      *
@@ -112,7 +124,19 @@ public class IdUtils {
      * @return 数字字符串
      */
     public static String bigIntegerToFixedString(BigInteger number, int length) {
-        String originNumberStr = number.toString();
+        return bigIntegerToFixedString(number, length, 10);
+    }
+
+    /**
+     * 将大整数转换为指定位数字符串，不满指定位前面添0
+     *
+     * @param number 不大于指定位的正整数
+     * @param length 指定位数
+     * @param radix  进制
+     * @return 数字字符串
+     */
+    public static String bigIntegerToFixedString(BigInteger number, int length, int radix) {
+        String originNumberStr = number.toString(radix);
         if (originNumberStr.length() > length) {
             throw new IllegalArgumentException("Number length is large than " + length + ", number is " + originNumberStr);
         } else if (originNumberStr.length() == length) {
@@ -135,7 +159,7 @@ public class IdUtils {
      * @return 字符是否正确
      */
     public static boolean isCharValid(String str, Set<Character> allowedChars) {
-        if (null == str || null == allowedChars || allowedChars.size() == 0) {
+        if (null == str || null == allowedChars || allowedChars.isEmpty()) {
             return false;
         }
 
@@ -155,12 +179,33 @@ public class IdUtils {
      * @return 如果是数字，返回true；反之false
      */
     public static boolean isNumeric(String str) {
-        if (null == str || str.length() == 0) {
+        if (null == str || str.isEmpty()) {
             return false;
         }
 
         for (int i = 0; i < str.length(); i++) {
             if (!Character.isDigit(str.charAt(i))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * 判断字符串是否是32进制数字
+     *
+     * @param str 字符串
+     * @return 如果是数字，返回true；反之false
+     */
+    public static boolean isRadix32(String str) {
+        if (null == str || str.isEmpty()) {
+            return false;
+        }
+
+        for (int i = 0; i < str.length(); i++) {
+            char currentChar = str.charAt(i);
+            if (!Character.isDigit(currentChar) && !Character.isLetter(currentChar)) {
                 return false;
             }
         }

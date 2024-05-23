@@ -32,7 +32,7 @@ public class NumberHidingGenerator {
     /**
      * 随机数生成器
      */
-    private static final Random RANDOM = new Random();
+    protected static final Random RANDOM = new Random();
 
     private final String chacha20Key;
 
@@ -222,7 +222,7 @@ public class NumberHidingGenerator {
      *
      * @param alphabetsString 字符集编码字符串
      */
-    private void parseAlphabets(String alphabetsString) {
+    protected void parseAlphabets(String alphabetsString) {
         if (null == alphabetsString) {
             throw new IllegalArgumentException("Invalid alphabet string!");
         }
