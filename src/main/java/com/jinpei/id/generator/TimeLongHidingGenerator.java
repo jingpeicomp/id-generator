@@ -66,7 +66,7 @@ public class TimeLongHidingGenerator extends NumberHidingGenerator {
 
         long timeMills = System.currentTimeMillis();
         int currentMinuteStampInDay = getCurrentMinuteStampInDay(timeMills);
-        long timeStamp =  currentMinuteStampInDay;
+        long timeStamp = currentMinuteStampInDay;
         ChaCha20 chaCha20 = createChaChar20();
         byte[] randomBytes = chaCha20.encrypt(originNumber, 512);
         String encryptedHmacBits = encryptHmacBits(originNumber, timeStamp, randomBytes);
@@ -167,7 +167,6 @@ public class TimeLongHidingGenerator extends NumberHidingGenerator {
      * @return 编码方式
      */
     protected int parseCoderIndex(String hidingNumberStr) {
-        int coderIndex = -1;
         char coderChar = hidingNumberStr.charAt(0);
         return Character.getNumericValue(coderChar);
     }
@@ -222,9 +221,37 @@ public class TimeLongHidingGenerator extends NumberHidingGenerator {
      * @return 是否合法
      */
     private boolean checkSecurity(Long originNumber, int originMinuteStampInDay, long timeMills, String originHmacBits, byte[] randomBytes) {
-        long minuteStamp =  + originMinuteStampInDay;
+        String encryptedHmacBits = encryptHmacBits(originNumber, originMinuteStampInDay, randomBytes);
+        if (originHmacBits.equals(encryptedHmacBits)) {
+            return true;
+        }
+        return checkSecurityWithDay(originNumber, originMinuteStampInDay, timeMills, originHmacBits, randomBytes);
+    }
+
+    private boolean checkSecurityWithDay(Long originNumber, int originMinuteStampInDay, long timeMills, String originHmacBits, byte[] randomBytes) {
+        long todayMinuteStamp = getTodayMinuteStamp(timeMills);
+        long minuteStamp = todayMinuteStamp + originMinuteStampInDay;
         String encryptedHmacBits = encryptHmacBits(originNumber, minuteStamp, randomBytes);
-        return originHmacBits.equals(encryptedHmacBits);
+        if (originHmacBits.equals(encryptedHmacBits)) {
+            return true;
+        }
+
+        //昨天
+        minuteStamp -= 1440;
+        encryptedHmacBits = encryptHmacBits(originNumber, minuteStamp, randomBytes);
+        if (originHmacBits.equals(encryptedHmacBits)) {
+            return true;
+        }
+
+
+        //前天
+        minuteStamp -= 1440;
+        encryptedHmacBits = encryptHmacBits(originNumber, minuteStamp, randomBytes);
+        if (originHmacBits.equals(encryptedHmacBits)) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
