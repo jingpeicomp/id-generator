@@ -66,7 +66,7 @@ public class TimeLongHidingGenerator extends NumberHidingGenerator {
 
         long timeMills = System.currentTimeMillis();
         int currentMinuteStampInDay = getCurrentMinuteStampInDay(timeMills);
-        long timeStamp = getTodayMinuteStamp(timeMills) + currentMinuteStampInDay;
+        long timeStamp =  currentMinuteStampInDay;
         ChaCha20 chaCha20 = createChaChar20();
         byte[] randomBytes = chaCha20.encrypt(originNumber, 512);
         String encryptedHmacBits = encryptHmacBits(originNumber, timeStamp, randomBytes);
@@ -222,21 +222,9 @@ public class TimeLongHidingGenerator extends NumberHidingGenerator {
      * @return 是否合法
      */
     private boolean checkSecurity(Long originNumber, int originMinuteStampInDay, long timeMills, String originHmacBits, byte[] randomBytes) {
-        long todayMinuteStamp = getTodayMinuteStamp(timeMills);
-        long minuteStamp = todayMinuteStamp + originMinuteStampInDay;
+        long minuteStamp =  + originMinuteStampInDay;
         String encryptedHmacBits = encryptHmacBits(originNumber, minuteStamp, randomBytes);
-        if (originMinuteStampInDay < 1439) {
-            return originHmacBits.equals(encryptedHmacBits);
-        } else {//可能跨天
-            if (originHmacBits.equals(encryptedHmacBits)) {
-                return true;
-            } else {
-                long lastDayMinuteStamp = getTodayMinuteStamp(timeMills);
-                minuteStamp = lastDayMinuteStamp + originMinuteStampInDay;
-                encryptedHmacBits = encryptHmacBits(originNumber, minuteStamp, randomBytes);
-                return originHmacBits.equals(encryptedHmacBits);
-            }
-        }
+        return originHmacBits.equals(encryptedHmacBits);
     }
 
     /**
